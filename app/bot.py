@@ -494,19 +494,11 @@ class CoachBot:
             await self.reply(update, "Sorry, this command is for admins only.")
             return
 
-        runner_count = await self.db.get_runner_count()
-        recent_runs = await self.db.fetchall(
-            "SELECT COUNT(*) as cnt FROM runs WHERE run_date >= date('now', '-7 days')"
-        )
-        weekly_runs = recent_runs[0]["cnt"] if recent_runs else 0
+        from admin.system_manager import get_system_status
 
-        text = (
-            f"📊 System Status\n\n"
-            f"Runners: {runner_count}\n"
-            f"Runs this week: {weekly_runs}\n"
-            f"Mode: {self.config.bot_mode}\n"
-            f"DB: {self.config.coach_db_path}\n"
-        )
+        text = await get_system_status(self.db, self.kb)
+        text += f"\n**Mode:** {self.config.bot_mode}"
+        text += f"\n**DB:** {self.config.coach_db_path}"
         await self.reply(update, text)
 
     async def cmd_admin_help(
@@ -549,9 +541,14 @@ class CoachBot:
         if not self.is_admin(chat_id):
             await self.reply(update, "Sorry, this command is for admins only.")
             return
-        await self.reply(
-            update, "Backup feature coming soon. Use scripts/backup.py manually."
-        )
+        from admin.system_manager import create_backup
+
+        await self.reply(update, "📦 Creating backup...")
+        path = await create_backup()
+        if path:
+            await self.reply(update, f"✅ Backup created: {path}")
+        else:
+            await self.reply(update, "❌ Backup failed.")
 
     async def cmd_admin_knowledge(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
