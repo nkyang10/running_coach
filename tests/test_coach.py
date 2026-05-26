@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -8,7 +9,7 @@ from app.coach import CoachEngine
 from app.config import Config
 from app.database import Database
 from app.knowledge import KnowledgeBase
-from app.models import PrimaryGoal, Runner, RunningLevel
+from app.models import PrimaryGoal, Run, Runner, RunningLevel
 
 FIXTURE_PATH = "tests/fixtures/knowledge_sample"
 
@@ -212,3 +213,79 @@ class TestCoachEngine:
         assert result["distance_km"] is None
         assert result["duration_sec"] is None
         assert result["rpe"] is None
+
+    async def test_check_adaptation_no_runner(self, engine: CoachEngine):
+        result = await engine.check_adaptation(99999)
+        assert result == ""
+
+    async def test_check_adaptation_few_runs(self, engine: CoachEngine, db: Database):
+        runner = Runner(chat_id=90010, name="New", running_level=RunningLevel.BEGINNER)
+        await db.create_runner(runner)
+        result = await engine.check_adaptation(90010)
+        assert result == ""
+
+    async def test_check_adaptation_high_fatigue(
+        self, engine: CoachEngine, db: Database
+    ):
+        runner = Runner(
+            chat_id=90011,
+            name="Tired",
+            running_level=RunningLevel.BEGINNER,
+            fatigue_level=4,
+        )
+        await db.create_runner(runner)
+        today = date.today()
+        for i in range(3):
+            run = Run(
+                chat_id=90011, run_date=today - timedelta(days=i), distance_km=5, rpe=5
+            )
+            await db.create_run(run)
+        result = await engine.check_adaptation(90011)
+        assert "High Fatigue" in result
+
+    async def test_check_adaptation_high_rpe(self, engine: CoachEngine, db: Database):
+        runner = Runner(
+            chat_id=90012, name="Intense", running_level=RunningLevel.INTERMEDIATE
+        )
+        await db.create_runner(runner)
+        today = date.today()
+        for i in range(4):
+            run = Run(
+                chat_id=90012, run_date=today - timedelta(days=i), distance_km=5, rpe=9
+            )
+            await db.create_run(run)
+        result = await engine.check_adaptation(90012)
+        assert "Intensity Warning" in result
+
+    async def test_check_deload_due(self, engine: CoachEngine, db: Database):
+        runner = Runner(
+            chat_id=90013,
+            name="Weekly",
+            running_level=RunningLevel.INTERMEDIATE,
+            week_of_program=4,
+        )
+        await db.create_runner(runner)
+        result = await engine._check_deload_due(runner, [])
+        assert "Deload Week" in result
+
+    async def test_update_runner_from_adaptation(
+        self, engine: CoachEngine, db: Database
+    ):
+        runner = Runner(
+            chat_id=90014,
+            name="Adapt",
+            running_level=RunningLevel.BEGINNER,
+            fatigue_level=3,
+            consistency_30d=0.5,
+        )
+        await db.create_runner(runner)
+        today = date.today()
+        for i in range(5):
+            run = Run(
+                chat_id=90014, run_date=today - timedelta(days=i), distance_km=5, rpe=2
+            )
+            await db.create_run(run)
+        await engine.update_runner_from_adaptation(90014)
+        updated = await db.get_runner(90014)
+        assert updated is not None
+        assert updated.consistency_30d > 0.5

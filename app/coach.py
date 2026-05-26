@@ -353,6 +353,120 @@ class CoachEngine:
 
         return created
 
+    # ─── Adaptive Engine ───
+
+    async def check_adaptation(self, chat_id: int) -> str:
+        runner = await self.db.get_runner(chat_id)
+        if not runner:
+            return ""
+
+        recent = await self.db.get_recent_runs(chat_id, days=21)
+        if len(recent) < 3:
+            return ""
+
+        messages = []
+        high_rpe_runs = [r for r in recent if r.rpe and r.rpe >= 8]
+        low_rpe_runs = [r for r in recent if r.rpe and r.rpe <= 4]
+        completed = [r for r in recent if r.distance_km and r.distance_km > 0]
+        missed = max(0, (len(recent) // 3) - len(completed))
+
+        if runner.fatigue_level >= 4:
+            messages.append(
+                "🔴 *High Fatigue Alert*\nYour fatigue level is {}. Consider taking a rest day or easy recovery run.".format(
+                    runner.fatigue_level
+                )
+            )
+
+        if len(high_rpe_runs) >= 3:
+            messages.append(
+                "🟡 *Intensity Warning*\n{} of your last {} runs were high effort (RPE 8+). Consider swapping a hard day for an easy recovery run.".format(
+                    len(high_rpe_runs), len(recent)
+                )
+            )
+
+        if len(low_rpe_runs) >= 3:
+            messages.append(
+                "🟢 *Ready for Progression*\nYour recent runs feel easy! Consider slightly increasing distance or adding strides to one session."
+            )
+
+        if runner.consistency_30d < 0.5 and runner.total_runs and runner.total_runs > 5:
+            messages.append(
+                "💪 *Consistency Boost*\nYour 30-day consistency is {:.0%}. Try setting a simple goal: run at least 3 times this week.".format(
+                    runner.consistency_30d
+                )
+            )
+
+        if missed >= 2:
+            messages.append(
+                "📅 *Missed Sessions*\nYou've missed {} expected sessions recently. Life happens — just get back out there!".format(
+                    missed
+                )
+            )
+
+        deload_msg = await self._check_deload_due(runner, recent)
+        if deload_msg:
+            messages.append(deload_msg)
+
+        plateau_msg = await self._check_plateau(runner, recent)
+        if plateau_msg:
+            messages.append(plateau_msg)
+
+        return "\n\n".join(messages) if messages else ""
+
+    async def _check_deload_due(self, runner: Runner, recent: list) -> str:
+        if runner.week_of_program >= 4 and runner.week_of_program % 4 == 0:
+            return "📋 *Deload Week Suggested*\nYou're entering week {} of your program. Consider a deload week with 40-50% of normal volume and no hard sessions.".format(
+                runner.week_of_program
+            )
+        return ""
+
+    async def _check_plateau(self, runner: Runner, recent: list) -> str:
+        if len(recent) < 6:
+            return ""
+
+        sorted_runs = sorted(recent, key=lambda r: r.run_date)
+        recent_km = [r.distance_km for r in sorted_runs[-6:] if r.distance_km]
+
+        if len(recent_km) < 4:
+            return ""
+
+        avg_first3 = sum(recent_km[:3]) / 3
+        avg_last3 = sum(recent_km[-3:]) / 3
+        diff = avg_last3 - avg_first3
+
+        if abs(diff) < avg_first3 * 0.05 and avg_first3 > 0:
+            return "📊 *Possible Plateau*\nYour average distance has been steady at ~{:.1f}km. Try varying your training: add a speed session or extend your long run.".format(
+                avg_first3
+            )
+
+        if diff < 0 and abs(diff) > avg_first3 * 0.1:
+            return "📉 *Declining Trend*\nYour average distance has dropped from {:.1f}km to {:.1f}km. Check in on your motivation or consider a rest week.".format(
+                avg_first3, avg_last3
+            )
+
+        return ""
+
+    async def update_runner_from_adaptation(self, chat_id: int) -> None:
+        runner = await self.db.get_runner(chat_id)
+        if not runner:
+            return
+
+        recent = await self.db.get_recent_runs(chat_id, days=21)
+        completed = [r for r in recent if r.distance_km and r.distance_km > 0]
+
+        if len(completed) >= 3:
+            avg_rpe = sum(r.rpe or 5 for r in completed) / len(completed)
+            if avg_rpe <= 3 and runner.fatigue_level > 1:
+                runner.fatigue_level -= 1
+            elif avg_rpe >= 7 and runner.fatigue_level < 5:
+                runner.fatigue_level += 1
+
+            if runner.consistency_30d is not None:
+                current_consistency = min(1.0, len(completed) / max(len(recent), 1))
+                runner.consistency_30d = round(current_consistency, 2)
+
+        await self.db.update_runner(runner)
+
     @staticmethod
     def _basic_parse(text: str) -> dict[str, Any]:
         result: dict[str, Any] = {
