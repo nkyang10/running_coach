@@ -41,28 +41,30 @@ def load_config(env_file: str | None = None) -> Config:
         load_dotenv()
 
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    if not token:
-        raise ValueError("TELEGRAM_BOT_TOKEN is required")
+    discord = os.getenv("DISCORD_BOT_TOKEN", "")
+    twilio_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
+    twilio_auth = os.getenv("TWILIO_AUTH_TOKEN", "")
+    whatsapp_from = os.getenv("WHATSAPP_FROM_NUMBER", "")
+
+    if not token and not discord and not (twilio_sid and twilio_auth and whatsapp_from):
+        raise ValueError(
+            "At least one platform token required: TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, or Twilio WhatsApp creds"
+        )
 
     openai_key = os.getenv("OPENAI_API_KEY", "")
     if not openai_key:
         raise ValueError("OPENAI_API_KEY is required")
 
     admin_ids_str = os.getenv("ADMIN_CHAT_IDS", "")
-    if not admin_ids_str:
-        raise ValueError("ADMIN_CHAT_IDS is required")
-
     admin_ids = []
-    for part in admin_ids_str.split(","):
-        part = part.strip()
-        if part:
-            try:
-                admin_ids.append(int(part))
-            except ValueError:
-                pass
-
-    if not admin_ids:
-        raise ValueError("ADMIN_CHAT_IDS must contain at least one valid chat ID")
+    if admin_ids_str:
+        for part in admin_ids_str.split(","):
+            part = part.strip()
+            if part:
+                try:
+                    admin_ids.append(int(part))
+                except ValueError:
+                    pass
 
     mode = os.getenv("BOT_MODE", "development")
     if mode not in ("development", "production", "test"):

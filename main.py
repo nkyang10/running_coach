@@ -53,9 +53,13 @@ async def main() -> int:
     service = CoachService(config, db, kb, coach)
     logger.info("coach_engine_ready")
 
-    telegram_bot = CoachBot(config, db, kb=kb, coach=coach)
-    await telegram_bot.start_bot()
-    logger.info("telegram_bot_started")
+    telegram_bot = None
+    if config.telegram_bot_token:
+        telegram_bot = CoachBot(config, db, kb=kb, coach=coach)
+        await telegram_bot.start_bot()
+        logger.info("telegram_bot_started")
+    else:
+        logger.info("telegram_bot_disabled_no_token")
 
     from app.health import HealthMonitor, run_health_loop
 
@@ -97,7 +101,8 @@ async def main() -> int:
         except KeyboardInterrupt:
             logger.info("shutdown_requested")
         finally:
-            await telegram_bot.stop_bot()
+            if telegram_bot:
+                await telegram_bot.stop_bot()
             await db.close()
 
     return 0
