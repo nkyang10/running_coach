@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
@@ -202,6 +202,8 @@ class Database:
     def __init__(self, db_path: str | Path) -> None:
         self.db_path = Path(db_path)
         self._conn: Optional[aiosqlite.Connection] = None
+        aiosqlite.register_adapter(date, lambda d: d.isoformat())
+        aiosqlite.register_adapter(datetime, lambda d: d.isoformat())
 
     async def connect(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -251,7 +253,7 @@ class Database:
     # ─── Runner CRUD ───
 
     async def create_runner(self, runner: Runner) -> Runner:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         await self.execute(
             """INSERT INTO runners (chat_id, name, age, gender, running_level, primary_goal,
                target_race_name, target_race_date, target_race_time_sec, running_history_months,
@@ -291,7 +293,7 @@ class Database:
         return self._row_to_runner(row)
 
     async def update_runner(self, runner: Runner) -> Runner:
-        runner.updated_at = datetime.utcnow()
+        runner.updated_at = datetime.now(timezone.utc)
         await self.execute(
             """UPDATE runners SET name=?, age=?, gender=?, running_level=?, primary_goal=?,
                target_race_name=?, target_race_date=?, target_race_time_sec=?,
