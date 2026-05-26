@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import structlog
@@ -11,6 +12,8 @@ def setup_logging(
     log_level: str = "INFO",
     log_file: str | None = "data/logs/coach.log",
     console: bool = True,
+    max_bytes: int = 10 * 1024 * 1024,
+    backup_count: int = 5,
 ) -> None:
     if log_file:
         log_path = Path(log_file)
@@ -45,8 +48,13 @@ def setup_logging(
         handlers.append(console_handler)
 
     if log_file:
-        file_handler = logging.FileHandler(log_file, encoding="utf-8")
-        file_handler.setFormatter(
+        rotating = RotatingFileHandler(
+            str(log_path),
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
+        )
+        rotating.setFormatter(
             structlog.stdlib.ProcessorFormatter(
                 processors=[
                     structlog.stdlib.ProcessorFormatter.remove_processors_meta,
@@ -55,7 +63,7 @@ def setup_logging(
                 foreign_pre_chain=shared_processors,
             )
         )
-        handlers.append(file_handler)
+        handlers.append(rotating)
 
     logging.basicConfig(
         level=getattr(logging, log_level.upper(), logging.INFO),

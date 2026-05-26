@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+from collections import defaultdict
 from datetime import date
 from typing import Optional
 
@@ -38,6 +40,20 @@ class CoachBot:
         self.kb = kb
         self.coach = coach
         self.application: Optional[Application] = None
+        self._last_cmd: dict[int, float] = defaultdict(float)
+        self._rate_limit_sec = 1.0
+
+    def _check_rate_limit(self, chat_id: int) -> bool:
+        now = time.time()
+        if now - self._last_cmd[chat_id] < self._rate_limit_sec:
+            return False
+        self._last_cmd[chat_id] = now
+        return True
+
+    def _sanitize_input(self, text: Optional[str]) -> str:
+        if not text:
+            return ""
+        return text.replace("\x00", "")[:4000]
 
     async def start_bot(self) -> Application:
         app = Application.builder().token(self.config.telegram_bot_token).build()
