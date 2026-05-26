@@ -63,6 +63,11 @@ class CoachBot:
         self.application: Optional[Application] = None
         self._last_cmd: dict[int, float] = defaultdict(float)
         self._rate_limit_sec = 1.0
+        self._junk_tracker: dict[int, list[float]] = defaultdict(list)
+        self._muted_until: dict[int, float] = {}
+        self._junk_threshold = 5
+        self._junk_window = 60
+        self._mute_duration = 300
 
     def _check_rate_limit(self, chat_id: int) -> bool:
         now = time.time()
@@ -88,6 +93,10 @@ class CoachBot:
         app.add_handler(CommandHandler("metrics", self.cmd_metrics))
         app.add_handler(CommandHandler("shoes", self.cmd_shoes))
         app.add_handler(CommandHandler("cancel", self.cmd_cancel))
+
+        app.add_handler(
+            MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_free_text)
+        )
 
         conv = ConversationHandler(
             entry_points=[CommandHandler("start", self.cmd_start)],
@@ -402,6 +411,105 @@ class CoachBot:
         )
         logger.info("onboarding_complete", chat_id=chat_id)
         return ConversationHandler.END
+
+    # ─── Free-form text handler ───
+
+    async def _handle_free_text(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        text = (
+            update.message.text.strip()
+            if update.message and update.message.text
+            else ""
+        )
+
+        now = time.time()
+
+        if chat_id in self._muted_until and now < self._muted_until[chat_id]:
+            remaining = int(self._muted_until[chat_id] - now)
+            await self.reply(
+                update,
+                f"⏸️ Take a breather... I'll be back in {remaining // 60}m {remaining % 60}s",
+            )
+            return
+
+        if not await self.db.get_runner(chat_id):
+            await self.reply(
+                update,
+                "Hey there! Use /start to get started \U0001f44b",
+                keyboard=MAIN_KEYBOARD,
+            )
+            return
+
+        reply = None
+        if self.coach:
+            reply = await self.coach.process_conversation(chat_id, text)
+
+        if reply:
+            await self.reply(update, reply, keyboard=MAIN_KEYBOARD)
+            self._junk_tracker[chat_id] = []
+            return
+
+        self._junk_tracker[chat_id].append(now)
+        self._junk_tracker[chat_id] = [
+            t for t in self._junk_tracker[chat_id] if now - t < self._junk_window
+        ]
+
+        if len(self._junk_tracker[chat_id]) >= self._junk_threshold:
+            self._muted_until[chat_id] = now + self._mute_duration
+            self._junk_tracker[chat_id] = []
+            await self.reply(
+                update,
+                "I'm a running coach, not a chat bot! \U0001f916\n\n"
+                f"Let's pause for {self._mute_duration // 60} minutes. "
+                "When you're back, try /plan, /record, or /status! \U0001f3c3",
+                keyboard=MAIN_KEYBOARD,
+            )
+            return
+
+        guiding = [
+            ("run", ["/record", "/plan"]),
+            ("plan", ["/plan"]),
+            ("train", ["/plan", "/record"]),
+            ("workout", ["/plan", "/record"]),
+            ("pace", ["/plan", "/status"]),
+            ("goal", ["/start", "/status"]),
+            ("shoe", ["/shoes"]),
+            ("weight", ["/metrics"]),
+            ("sleep", ["/metrics"]),
+            ("hurt", ["/start"]),
+            ("pain", ["/start"]),
+            ("injure", ["/start"]),
+            ("history", ["/history"]),
+            ("progress", ["/status", "/history"]),
+            ("help", ["/help"]),
+            ("command", ["/help"]),
+        ]
+        suggested = []
+        for keyword, cmds in guiding:
+            if keyword in text.lower():
+                suggested.extend(cmds)
+        if suggested:
+            suggested = list(dict.fromkeys(suggested))
+            await self.reply(
+                update,
+                "I think you might be looking for one of these \U0001f447\n"
+                + "\n".join(f"  \u2022 `{c}`" for c in suggested),
+                keyboard=MAIN_KEYBOARD,
+            )
+        else:
+            await self.reply(
+                update,
+                "I'm your running coach \U0001f3c3 I can help with plans, tracking runs, "
+                "and checking progress!\n\n"
+                "Try these:\n"
+                "  \u2022 `/plan` - Custom training plan\n"
+                "  \u2022 `/record` - Log a run\n"
+                "  \u2022 `/status` - Your progress\n"
+                "  \u2022 `/help` - All commands",
+                keyboard=MAIN_KEYBOARD,
+            )
 
     # ─── /help ───
 
