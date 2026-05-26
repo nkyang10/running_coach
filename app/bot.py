@@ -15,6 +15,7 @@ from telegram.ext import (
 
 from app.config import Config
 from app.database import Database
+from app.knowledge import KnowledgeBase
 from app.logger import get_logger
 from app.models import PrimaryGoal, RunningLevel, Runner
 
@@ -24,9 +25,12 @@ ONBOARDING_NAME, ONBOARDING_LEVEL, ONBOARDING_GOAL, ONBOARDING_WEEKLY_KM = range
 
 
 class CoachBot:
-    def __init__(self, config: Config, db: Database) -> None:
+    def __init__(
+        self, config: Config, db: Database, kb: KnowledgeBase | None = None
+    ) -> None:
         self.config = config
         self.db = db
+        self.kb = kb
         self.application: Optional[Application] = None
 
     async def start_bot(self) -> Application:
@@ -63,8 +67,9 @@ class CoachBot:
         )
         app.add_handler(onboarding_conv)
 
-        app.add_handler(CommandHandler("admin_status", self.cmd_admin_status))
-        app.add_handler(CommandHandler("admin_help", self.cmd_admin_help))
+        from admin.commands import register_admin_commands
+
+        register_admin_commands(self)
 
         self.application = app
         logger.info("bot_initialized")
@@ -296,5 +301,98 @@ class CoachBot:
             "/admin_help - Admin command list\n"
             "/admin_reload - Reload knowledge base\n"
             "/admin_backup - Create backup\n"
+            "/admin_knowledge - Manage knowledge base\n"
         )
         await self.reply(update, text)
+
+    async def cmd_admin_reload(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not self.is_admin(chat_id):
+            await self.reply(update, "Sorry, this command is for admins only.")
+            return
+        if self.kb:
+            self.kb.reload()
+            await self.reply(
+                update, f"✅ Knowledge base reloaded ({len(self.kb.get_all())} files)."
+            )
+        else:
+            await self.reply(update, "No knowledge base loaded.")
+
+    async def cmd_admin_backup(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not self.is_admin(chat_id):
+            await self.reply(update, "Sorry, this command is for admins only.")
+            return
+        await self.reply(
+            update, "Backup feature coming soon. Use scripts/backup.py manually."
+        )
+
+    async def cmd_admin_knowledge(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not self.is_admin(chat_id):
+            await self.reply(update, "Sorry, this command is for admins only.")
+            return
+
+        if not self.kb:
+            await self.reply(update, "No knowledge base loaded.")
+            return
+
+        args = context.args if context.args else []
+
+        if not args:
+            files = self.kb.list_files()
+            if not files:
+                await self.reply(update, "Knowledge base is empty.")
+                return
+            lines = ["📚 Knowledge Base Files:\n"]
+            for f in files:
+                lines.append(f"  📄 {f}")
+            await self.reply(update, "\n".join(lines))
+            return
+
+        subcmd = args[0].lower()
+
+        if subcmd == "show" and len(args) >= 2:
+            path = " ".join(args[1:])
+            doc = self.kb.get(path)
+            if not doc:
+                await self.reply(update, f"File not found: {path}")
+                return
+            content = doc.content
+            max_len = 3500
+            if len(content) > max_len:
+                content = content[:max_len] + "\n\n... (truncated)"
+            await self.reply(update, f"📄 *{path}*\n\n{content}")
+
+        elif subcmd == "list":
+            files = self.kb.list_files()
+            if not files:
+                await self.reply(update, "Knowledge base is empty.")
+                return
+            lines = ["📚 Knowledge Base Files:\n"]
+            for f in files:
+                lines.append(f"  📄 {f}")
+            await self.reply(update, "\n".join(lines))
+
+        elif subcmd == "search" and len(args) >= 2:
+            query = " ".join(args[1:])
+            results = self.kb.search(query)
+            if not results:
+                await self.reply(update, f"No results for '{query}'.")
+                return
+            lines = [f"🔍 Search results for '{query}':\n"]
+            for doc in results:
+                lines.append(f"  📄 {doc.path} — {doc.title}")
+            await self.reply(update, "\n".join(lines))
+
+        else:
+            await self.reply(
+                update,
+                "Usage:\n/admin_knowledge list\n/admin_knowledge show <path>\n/admin_knowledge search <query>",
+            )

@@ -6,6 +6,7 @@ import sys
 from app.bot import CoachBot
 from app.config import ensure_db_path, load_config
 from app.database import Database
+from app.knowledge import KnowledgeBase
 from app.logger import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -40,7 +41,11 @@ async def main() -> int:
     await db.init_tables()
     logger.info("database_ready")
 
-    bot = CoachBot(config, db)
+    kb = KnowledgeBase(config.coach_knowledge_path)
+    kb.load()
+    logger.info("knowledge_loaded", count=len(kb.get_all()))
+
+    bot = CoachBot(config, db, kb=kb)
     await bot.start_bot()
 
     if config.bot_mode == "development":
