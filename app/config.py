@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 class Config:
     telegram_bot_token: str
     openai_api_key: str
+    openai_base_url: str | None = None
+    openai_model: str = "gpt-4o-mini"
     discord_bot_token: str | None = None
     anthropic_api_key: str | None = None
     admin_chat_ids: list[int] = field(default_factory=list)
@@ -79,6 +81,8 @@ def load_config(env_file: str | None = None) -> Config:
     return Config(
         telegram_bot_token=token,
         openai_api_key=openai_key,
+        openai_base_url=os.getenv("OPENAI_BASE_URL") or None,
+        openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         discord_bot_token=os.getenv("DISCORD_BOT_TOKEN") or None,
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         admin_chat_ids=admin_ids,

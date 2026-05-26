@@ -20,7 +20,10 @@ class CoachEngine:
         self.config = config
         self.db = db
         self.kb = kb
-        self.client = AsyncOpenAI(api_key=config.openai_api_key)
+        kwargs = {"api_key": config.openai_api_key}
+        if config.openai_base_url:
+            kwargs["base_url"] = config.openai_base_url
+        self.client = AsyncOpenAI(**kwargs)
 
     async def generate_plan(self, chat_id: int, weather: Optional[dict] = None) -> str:
         runner = await self.db.get_runner(chat_id)
@@ -102,7 +105,7 @@ class CoachEngine:
 
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.config.openai_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
@@ -151,7 +154,7 @@ class CoachEngine:
 
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.config.openai_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": question},
@@ -308,7 +311,7 @@ class CoachEngine:
         )
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=self.config.openai_model,
                 messages=[
                     {
                         "role": "system",
