@@ -12,6 +12,8 @@ venv/
 
 # Runtime data (auto-created)
 data/coach.db
+data/coach.db-shm
+data/coach.db-wal
 data/logs/
 data/backups/
 

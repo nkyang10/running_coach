@@ -123,7 +123,9 @@ class CoachBot:
 
         runner = Runner(
             chat_id=chat_id,
-            name=update.effective_user.first_name if update.effective_user else "Runner",
+            name=(
+                update.effective_user.first_name if update.effective_user else "Runner"
+            ),
             last_active=date.today(),
         )
         await self.db.create_runner(runner)
