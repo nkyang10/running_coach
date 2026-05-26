@@ -78,8 +78,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          curl -X POST ${{ secrets.PRODUCTION_WEBHOOK_URL }} \
+      - name: Deploy webhook
+        if: env.PRODUCTION_WEBHOOK_URL != ''
+        env:
+          PRODUCTION_WEBHOOK_URL: ${{ secrets.PRODUCTION_WEBHOOK_URL }}
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          curl -X POST "$PRODUCTION_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" \
+            -H "X-Deploy-Token: $DEPLOY_TOKEN" \
             -d '{"repo": "coach", "branch": "main", "commit": "${{ github.sha }}"}'
