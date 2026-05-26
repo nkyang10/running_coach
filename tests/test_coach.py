@@ -37,12 +37,13 @@ def mock_openai() -> AsyncMock:
     mock = AsyncMock()
     choice = MagicMock()
     choice.message.content = (
-        "🏃 *Weekly Training Plan*\n\n"
-        "**Monday** — Easy run 30 min @ Zone 2 (conversational pace)\n"
-        "**Wednesday** — Tempo run: 10 min warm-up, 15 min @ threshold pace, 5 min cool-down\n"
-        "**Friday** — Easy run 35 min with 4x30s strides at end\n"
-        "**Saturday** — Long run 60 min @ Zone 2\n\n"
-        "💡 *Tips*\n- Stay hydrated throughout the week\n- Stretch after each run"
+        '{"plan_name":"Weekly Plan","summary":"A balanced week of running",'
+        '"days":['
+        '{"day":"Monday","workout_type":"easy","description":"Easy run 30 min","duration_min":30,"pace_target":"Zone 2","rpe_target":4,"coaching_tip":"Keep it conversational"},'
+        '{"day":"Wednesday","workout_type":"tempo","description":"Tempo run 10min warm-up + 15min threshold + 5min cool","duration_min":30,"pace_target":"Threshold","rpe_target":7,"coaching_tip":"Hold back slightly in first 5min"},'
+        '{"day":"Friday","workout_type":"easy","description":"Easy run 35 min with strides","duration_min":35,"pace_target":"Zone 2","rpe_target":4,"coaching_tip":"Add 4x100m strides at end"},'
+        '{"day":"Saturday","workout_type":"long_run","description":"Long run","duration_min":60,"pace_target":"Zone 2","rpe_target":4,"coaching_tip":"Fuel properly before and hydrate during"}'
+        "]}"
     )
     mock.chat.completions.create.return_value = MagicMock(choices=[choice])
     return mock
@@ -105,7 +106,7 @@ class TestCoachEngine:
         )
         await db.create_runner(runner)
         result = await engine.generate_plan(90003)
-        assert "Training Plan" in result or "plan" in result.lower()
+        assert "Weekly" in result
 
     async def test_safety_filter_weekly_mileage(
         self, engine: CoachEngine, db: Database

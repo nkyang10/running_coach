@@ -30,8 +30,19 @@ PREF_DAYS, PREF_TIME, PREF_VIBE = range(4, 7)
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
-        ["🏃 /plan", "📝 /record", "📊 /status"],
-        ["👟 /shoes", "📋 /history", "❓ /help"],
+        ["/plan", "/record", "/shoes"],
+        ["/status", "/history", "/metrics"],
+        ["/help"],
+    ],
+    resize_keyboard=True,
+)
+
+ADMIN_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        ["/plan", "/record", "/shoes"],
+        ["/status", "/history", "/metrics"],
+        ["/admin_health", "/admin_backup", "/admin_reload"],
+        ["/admin_knowledge", "/help"],
     ],
     resize_keyboard=True,
 )
@@ -134,9 +145,13 @@ class CoachBot:
     def is_admin(self, chat_id: int) -> bool:
         return chat_id in self.config.admin_chat_ids
 
-    async def reply(self, update: Update, text: str, keyboard=None) -> None:
+    async def reply(
+        self, update: Update, text: str, keyboard=None, parse_mode=None
+    ) -> None:
         if update.message:
-            await update.message.reply_text(text)
+            await update.message.reply_text(
+                text, reply_markup=keyboard, parse_mode=parse_mode
+            )
 
     # ─── /start ───
 
@@ -155,7 +170,8 @@ class CoachBot:
                 f"Total runs: {existing.total_runs} 🏃\n\n"
                 f"Tap a button below or type a command!"
             )
-            await self.reply(update, msg, keyboard=MAIN_KEYBOARD)
+            kb = ADMIN_KEYBOARD if self.is_admin(chat_id) else MAIN_KEYBOARD
+            await self.reply(update, msg, keyboard=kb)
             return ConversationHandler.END
 
         context.user_data["onboard_name"] = (
@@ -445,8 +461,12 @@ class CoachBot:
 
         task = asyncio.create_task(progress_updater())
         try:
+            from telegram.constants import ParseMode
+
             plan = await self.coach.generate_plan(chat_id)
-            await self.reply(update, plan, keyboard=MAIN_KEYBOARD)
+            await self.reply(
+                update, plan, keyboard=MAIN_KEYBOARD, parse_mode=ParseMode.MARKDOWN
+            )
         finally:
             task.cancel()
 

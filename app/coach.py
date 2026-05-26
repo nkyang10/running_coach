@@ -11,7 +11,7 @@ from app.config import Config
 from app.database import Database
 from app.knowledge import KnowledgeBase
 from app.logger import get_logger
-from app.models import Run, Runner
+from app.models import CoachObservation, Run, Runner
 
 logger = get_logger(__name__)
 
@@ -98,6 +98,17 @@ class CoachEngine:
             "- Never suggest running through severe pain\n"
             "- Recommend rest day if fatigue >= 4/5\n"
             "- Keep recommendations within the runner's experience level\n"
+            "\n"
+            "## Output Format\n"
+            "Return ONLY valid JSON. Use this structure:\n"
+            + (
+                '{"plan_name": "Week X", "summary": "...",'
+                '"days": [{"day": "Monday", "workout_type": "easy",'
+                '"description": "...", "duration_min": 30, "distance_km": null,'
+                '"pace_target": "Zone 2", "rpe_target": 4, "coaching_tip": "..."}]}'
+            )
+            + "\n"
+            "Do NOT wrap in markdown code fences. Raw JSON only.\n"
         )
 
         user_prompt = self._build_user_prompt(
@@ -117,16 +128,17 @@ class CoachEngine:
                 temperature=0.7,
                 max_tokens=self.config.openai_max_tokens,
             )
-            plan = (
-                response.choices[0].message.content
-                or "Sorry, I couldn't generate a plan."
-            )
+            raw = response.choices[0].message.content or "{}"
         except Exception as e:
             logger.error("llm_plan_failed", error=str(e))
-            plan = self._fallback_plan(runner)
+            fallback = self._fallback_plan(runner)
+            await self._store_plan(chat_id, fallback)
+            return self._format_plan_display(fallback, runner)
 
-        plan = self._safety_filter(plan, runner)
-        return plan
+        plan_data = self._parse_plan_json(raw)
+        plan_data = self._safety_filter_structured(plan_data, runner)
+        await self._store_plan(chat_id, plan_data)
+        return self._format_plan_display(plan_data, runner)
 
     async def generate_workout_advice(self, chat_id: int, question: str) -> str:
         runner = await self.db.get_runner(chat_id)
@@ -221,88 +233,170 @@ class CoachEngine:
                 "- Pace targets or RPE for each workout",
                 "- Brief coaching tip for each day",
                 "- Notes about warm-up, cool-down, or drills if appropriate",
+                "",
+                "Use Telegram Markdown: **bold** for day headers and emphasis.",
+                "Use bullet points (`-`) for each day's workout details.",
+                "Use `---` as a separator between days. Keep it clean and readable.",
             ]
         )
 
         return "\n".join(lines)
 
-    def _safety_filter(self, plan: str, runner: Runner) -> str:
-        lines = plan.split("\n")
+    def _safety_filter_structured(self, data: dict, runner: Runner) -> dict:
+        days = data.get("days", [])
         warnings = []
-        safe_lines = []
-
-        week_km = 0
-        hard_sessions = 0
-        total_sessions = 0
-
-        for line in lines:
-            lower = line.lower()
-            km = self._extract_km(line)
-            week_km += km
-
-            if any(
-                hw in lower for hw in ["tempo", "interval", "race", "track", "speed"]
-            ):
-                hard_sessions += 1
-            if any(
-                wt in lower
-                for wt in ["run", "workout", "session", "cross-train", "strength"]
-            ):
-                total_sessions += 1
-            if "rest" in lower or "recovery" in lower:
-                pass
+        week_km = sum(d.get("distance_km") or 0 for d in days)
+        hard_sessions = sum(
+            1 for d in days if d.get("workout_type") in ("tempo", "interval")
+        )
+        total_sessions = len(days)
 
         max_weekly = runner.current_weekly_km * 1.15
         if week_km > max_weekly and max_weekly > 0:
             warnings.append(
-                f"⚠️ Weekly mileage ({week_km:.1f}km) exceeds 115% of current ({max_weekly:.1f}km). Consider reducing."
+                f"Weekly distance {week_km:.0f}km exceeds 115% of current ({max_weekly:.0f}km)"
             )
 
         if hard_sessions > 2:
-            warnings.append(
-                f"⚠️ Plan has {hard_sessions} hard sessions. Max recommended is 2 per week."
-            )
+            warnings.append(f"Too many hard sessions ({hard_sessions}), max 2")
 
         if total_sessions > 7:
-            warnings.append(
-                f"⚠️ Plan has {total_sessions} sessions. Max recommended is 7 per week (including cross-training)."
-            )
+            warnings.append(f"Too many sessions ({total_sessions}), max 7")
 
         if warnings:
-            safe_lines.append("📋 *Safety Review*\n")
-            safe_lines.extend(warnings)
-            safe_lines.append("")
-            safe_lines.append("---")
-            safe_lines.append("")
+            data["_warnings"] = warnings
+        return data
 
-        safe_lines.append(plan)
-        return "\n".join(safe_lines)
-
-    def _fallback_plan(self, runner: Runner) -> str:
+    def _fallback_plan(self, runner: Runner) -> dict:
         days_map = {
             3: ["Mon", "Wed", "Fri"],
             4: ["Mon", "Wed", "Fri", "Sat"],
             5: ["Mon", "Tue", "Thu", "Fri", "Sun"],
         }
-        default_days = days_map.get(runner.week_of_program % 3 + 3, days_map[4])
-        runs = [
-            f"**{d}** — Easy run {30 + runner.week_of_program * 2} min @ Zone 2 (conversational pace)"
-            for d in default_days
-        ]
-        runs.append(
-            f"**{['Sat','Sun'][default_days[-1]!='Sat']}** — Long run {45 + runner.week_of_program * 5} min @ Zone 2"
-        )
-        plan = [
-            f"🏃 *Weekly Training Plan* — {runner.name or 'Runner'}\n",
-            "Here's a basic starting plan while I prepare something more tailored:\n",
-            *runs,
-            "",
-            "💡 *Tips*",
-            "- Warm up with 5 min easy jog + dynamic stretches before each run",
-            "- Cool down with 5 min easy jog + static stretches after each run",
-            "- Listen to your body — take an extra rest day if needed",
-        ]
-        return "\n".join(plan)
+        d = days_map.get(runner.week_of_program % 3 + 3, days_map[4])
+        return {
+            "plan_name": f"Weekly Plan for {runner.name or 'Runner'}",
+            "summary": "Basic starting plan while I prepare something tailored",
+            "days": [
+                {
+                    "day": day,
+                    "workout_type": "easy",
+                    "description": f"Easy run {30 + runner.week_of_program * 2} min @ Zone 2",
+                    "duration_min": 30 + runner.week_of_program * 2,
+                    "pace_target": "Zone 2",
+                    "rpe_target": 4,
+                    "coaching_tip": "Keep conversational pace",
+                }
+                for day in d
+            ]
+            + [
+                {
+                    "day": d[-1] if d[-1] != "Sat" else "Sun",
+                    "workout_type": "long_run",
+                    "description": f"Long run {45 + runner.week_of_program * 5} min",
+                    "duration_min": 45 + runner.week_of_program * 5,
+                    "pace_target": "Zone 2",
+                    "rpe_target": 4,
+                    "coaching_tip": "Fuel properly before and hydrate during",
+                }
+            ],
+        }
+
+    async def _store_plan(self, chat_id: int, plan_data: dict) -> None:
+        try:
+            import json
+            from datetime import date as _d
+
+            all_obs = await self.db.get_observations(chat_id, active_only=True)
+            existing = [o for o in all_obs if o.category == "plan"]
+            stored = json.dumps(plan_data, ensure_ascii=False)[:2000]
+            if existing:
+                obs = existing[0]
+                obs.observation = stored
+                obs.last_observed = _d.today()
+            else:
+                obs = CoachObservation(
+                    chat_id=chat_id,
+                    category="plan",
+                    observation=stored,
+                    evidence="generated",
+                    confidence=3,
+                    first_observed=_d.today(),
+                    last_observed=_d.today(),
+                )
+                await self.db.create_observation(obs)
+        except Exception as e:
+            from app.logger import get_logger as _gl
+
+            _gl(__name__).warning("plan_store_failed", error=str(e))
+
+    def _parse_plan_json(self, raw: str) -> dict:
+        import json
+
+        raw = raw.strip()
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.DOTALL)
+        try:
+            data = json.loads(raw)
+            if "days" in data and isinstance(data["days"], list):
+                return data
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning("plan_json_parse_failed", error=str(e))
+        return {"plan_name": "Weekly Plan", "summary": "", "days": []}
+
+    def _format_plan_display(self, data: dict, runner) -> str:
+        name = data.get("plan_name", "Weekly Plan") or "Weekly Plan"
+        summary = data.get("summary", "") or ""
+        days = data.get("days", [])
+
+        lines = [f"🏃 *{name}*"]
+        if summary:
+            lines.append(f"_{summary}_\n")
+
+        day_emojis = {
+            "easy": "🟢",
+            "tempo": "🟡",
+            "interval": "🔴",
+            "long_run": "🔵",
+            "recovery": "💚",
+            "cross_train": "💪",
+            "rest": "😴",
+        }
+
+        for day in days:
+            day_name = day.get("day", "?")
+            wtype = day.get("workout_type", "run")
+            emoji = day_emojis.get(wtype, "🏃")
+            desc = day.get("description", "")
+            dur = day.get("duration_min")
+            dist = day.get("distance_km")
+            pace = day.get("pace_target", "")
+            rpe = day.get("rpe_target")
+            tip = day.get("coaching_tip", "")
+
+            parts = [f"\n{emoji} **{day_name}**"]
+            if desc:
+                parts.append(f"   {desc}")
+            if dur or dist:
+                detail = []
+                if dur:
+                    detail.append(f"{dur} min")
+                if dist:
+                    detail.append(f"{dist} km")
+                if pace:
+                    detail.append(f"_{pace}_")
+                parts.append(f"   {' | '.join(detail)}")
+            if rpe:
+                parts.append(f"   RPE target: {rpe}")
+            if tip:
+                parts.append(f"   💡 {tip}")
+            lines.extend(parts)
+
+        week_km = sum(d.get("distance_km") or 0 for d in days)
+        week_min = sum(d.get("duration_min") or 0 for d in days)
+        if week_km > 0 or week_min > 0:
+            lines.append(f"\n📊 **Week Total:** {week_km:.0f} km · {week_min} min")
+        lines.append("\n🔥 *Ready to crush this week!*")
+        return "\n".join(lines)
 
     async def parse_run_log(self, chat_id: int, text: str) -> dict[str, Any]:
         prompt = (

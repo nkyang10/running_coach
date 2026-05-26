@@ -73,6 +73,7 @@ class ObservationCategory(str, Enum):
     MOTIVATION = "motivation"
     PATTERN = "pattern"
     PREFERENCE = "preference"
+    PLAN = "plan"
 
 
 class MilestoneType(str, Enum):
