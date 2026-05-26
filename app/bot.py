@@ -11,8 +11,6 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     ConversationHandler,
-    MessageHandler,
-    filters,
 )
 
 from app.coach import CoachEngine
@@ -60,34 +58,6 @@ class CoachBot:
 
         app.add_handler(CommandHandler("start", self.cmd_start))
         app.add_handler(CommandHandler("help", self.cmd_help))
-
-        onboarding_conv = ConversationHandler(
-            entry_points=[CommandHandler("start", self.cmd_start)],
-            states={
-                ONBOARDING_NAME: [
-                    MessageHandler(
-                        filters.TEXT & ~filters.COMMAND, self.onboarding_name
-                    )
-                ],
-                ONBOARDING_LEVEL: [
-                    MessageHandler(
-                        filters.TEXT & ~filters.COMMAND, self.onboarding_level
-                    )
-                ],
-                ONBOARDING_GOAL: [
-                    MessageHandler(
-                        filters.TEXT & ~filters.COMMAND, self.onboarding_goal
-                    )
-                ],
-                ONBOARDING_WEEKLY_KM: [
-                    MessageHandler(
-                        filters.TEXT & ~filters.COMMAND, self.onboarding_weekly_km
-                    )
-                ],
-            },
-            fallbacks=[CommandHandler("cancel", self.cmd_cancel)],
-        )
-        app.add_handler(onboarding_conv)
         app.add_handler(CommandHandler("plan", self.cmd_plan))
         app.add_handler(CommandHandler("log", self.cmd_log))
         app.add_handler(CommandHandler("status", self.cmd_status))
@@ -95,9 +65,12 @@ class CoachBot:
         app.add_handler(CommandHandler("metrics", self.cmd_metrics))
         app.add_handler(CommandHandler("shoes", self.cmd_shoes))
 
+        self.application = app
+
         from admin.commands import register_admin_commands
 
         register_admin_commands(self)
+        logger.info("bot_initialized")
 
         self.application = app
         logger.info("bot_initialized")
@@ -105,13 +78,20 @@ class CoachBot:
         if self.config.bot_mode == "development":
             await app.initialize()
             await app.start()
+            await app.updater.start_polling()
             logger.info("bot_started_polling")
         return app
 
     async def stop_bot(self) -> None:
         if self.application:
-            await self.application.stop()
-            await self.application.shutdown()
+            try:
+                await self.application.stop()
+            except Exception:
+                pass
+            try:
+                await self.application.shutdown()
+            except Exception:
+                pass
             logger.info("bot_stopped")
 
     def is_admin(self, chat_id: int) -> bool:
@@ -125,7 +105,7 @@ class CoachBot:
 
     async def cmd_start(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> int:
+    ) -> None:
         chat_id = update.effective_user.id if update.effective_user else 0
         existing = await self.db.get_runner(chat_id)
 
@@ -139,14 +119,20 @@ class CoachBot:
                 "Commands: /plan  /log  /status  /metrics  /history  /help"
             )
             await self.reply(update, welcome)
-            return ConversationHandler.END
+            return
+
+        runner = Runner(
+            chat_id=chat_id,
+            name=update.effective_user.first_name if update.effective_user else "Runner",
+            last_active=date.today(),
+        )
+        await self.db.create_runner(runner)
 
         await self.reply(
             update,
-            "Welcome to AI Running Coach! 🏃\n\n"
-            "Let's get to know you. What's your name?",
+            f"Welcome {runner.name}! Your profile is created. 🎉\n\n"
+            "Commands: /plan  /log  /status  /metrics  /history  /help",
         )
-        return ONBOARDING_NAME
 
     async def onboarding_name(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
