@@ -56,6 +56,22 @@ async def main() -> int:
     await telegram_bot.start_bot()
     logger.info("telegram_bot_started")
 
+    from app.health import HealthMonitor, run_health_loop
+
+    async def alert_admin(msg: str):
+        import httpx
+        for aid in config.admin_chat_ids:
+            try:
+                url = f"https://api.telegram.org/bot{config.telegram_bot_token}/sendMessage"
+                async with httpx.AsyncClient() as client:
+                    await client.post(url, json={"chat_id": aid, "text": msg})
+            except Exception:
+                pass
+
+    health = HealthMonitor(db, alert_callback=alert_admin)
+    asyncio.create_task(run_health_loop(health, interval_seconds=3600))
+    logger.info("health_monitor_started")
+
     discord_bot = None
     if config.discord_bot_token:
         discord_bot = DiscordBot(config, service)
