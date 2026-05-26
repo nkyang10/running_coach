@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 class Config:
     telegram_bot_token: str
     openai_api_key: str
+    discord_bot_token: str | None = None
     anthropic_api_key: str | None = None
     admin_chat_ids: list[int] = field(default_factory=list)
     bot_mode: str = "development"
@@ -78,6 +79,7 @@ def load_config(env_file: str | None = None) -> Config:
     return Config(
         telegram_bot_token=token,
         openai_api_key=openai_key,
+        discord_bot_token=os.getenv("DISCORD_BOT_TOKEN") or None,
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         admin_chat_ids=admin_ids,
         bot_mode=mode,

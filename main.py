@@ -5,8 +5,10 @@ import sys
 
 from app.bot import CoachBot
 from app.coach import CoachEngine
+from app.coach_service import CoachService
 from app.config import ensure_db_path, load_config
 from app.database import Database
+from app.discord_bot import DiscordBot
 from app.knowledge import KnowledgeBase
 from app.logger import get_logger, setup_logging
 
@@ -47,10 +49,21 @@ async def main() -> int:
     logger.info("knowledge_loaded", count=len(kb.get_all()))
 
     coach = CoachEngine(config, db, kb)
+    service = CoachService(config, db, kb, coach)
     logger.info("coach_engine_ready")
 
-    bot = CoachBot(config, db, kb=kb, coach=coach)
-    await bot.start_bot()
+    telegram_bot = CoachBot(config, db, kb=kb, coach=coach)
+    await telegram_bot.start_bot()
+    logger.info("telegram_bot_started")
+
+    discord_bot = None
+    if config.discord_bot_token:
+        discord_bot = DiscordBot(config, service)
+        logger.info("discord_bot_starting")
+        asyncio.create_task(discord_bot.start(config.discord_bot_token))
+        logger.info("discord_bot_started")
+    else:
+        logger.info("discord_bot_disabled_no_token")
 
     if config.bot_mode == "development":
         try:
@@ -59,7 +72,7 @@ async def main() -> int:
         except KeyboardInterrupt:
             logger.info("shutdown_requested")
         finally:
-            await bot.stop_bot()
+            await telegram_bot.stop_bot()
             await db.close()
 
     return 0
