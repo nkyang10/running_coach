@@ -4,6 +4,7 @@ import re
 from datetime import date
 from typing import Any, Optional
 
+import httpx
 from openai import AsyncOpenAI
 
 from app.config import Config
@@ -20,7 +21,10 @@ class CoachEngine:
         self.config = config
         self.db = db
         self.kb = kb
-        kwargs = {"api_key": config.openai_api_key}
+        http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(config.openai_timeout_sec, connect=10.0),
+        )
+        kwargs = {"api_key": config.openai_api_key, "http_client": http_client}
         if config.openai_base_url:
             kwargs["base_url"] = config.openai_base_url
         self.client = AsyncOpenAI(**kwargs)

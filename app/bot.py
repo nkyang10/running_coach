@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections import defaultdict
 from datetime import date
 from typing import Optional
 
-from telegram import Update
+from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import (
     Application,
     CommandHandler,
     ContextTypes,
     ConversationHandler,
+    MessageHandler,
+    filters,
 )
 
 from app.coach import CoachEngine
@@ -23,6 +26,15 @@ from app.models import PrimaryGoal, RunningLevel, Runner
 logger = get_logger(__name__)
 
 ONBOARDING_NAME, ONBOARDING_LEVEL, ONBOARDING_GOAL, ONBOARDING_WEEKLY_KM = range(4)
+PREF_DAYS, PREF_TIME, PREF_VIBE = range(4, 7)
+
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+    [
+        ["🏃 /plan", "📝 /record", "📊 /status"],
+        ["👟 /shoes", "📋 /history", "❓ /help"],
+    ],
+    resize_keyboard=True,
+)
 
 
 class CoachBot:
@@ -56,24 +68,52 @@ class CoachBot:
     async def start_bot(self) -> Application:
         app = Application.builder().token(self.config.telegram_bot_token).build()
 
-        app.add_handler(CommandHandler("start", self.cmd_start))
         app.add_handler(CommandHandler("help", self.cmd_help))
         app.add_handler(CommandHandler("plan", self.cmd_plan))
         app.add_handler(CommandHandler("log", self.cmd_log))
+        app.add_handler(CommandHandler("record", self.cmd_log))
         app.add_handler(CommandHandler("status", self.cmd_status))
         app.add_handler(CommandHandler("history", self.cmd_history))
         app.add_handler(CommandHandler("metrics", self.cmd_metrics))
         app.add_handler(CommandHandler("shoes", self.cmd_shoes))
+        app.add_handler(CommandHandler("cancel", self.cmd_cancel))
+
+        conv = ConversationHandler(
+            entry_points=[CommandHandler("start", self.cmd_start)],
+            states={
+                ONBOARDING_NAME: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self._onboard_name)
+                ],
+                ONBOARDING_LEVEL: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self._onboard_level)
+                ],
+                ONBOARDING_GOAL: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self._onboard_goal)
+                ],
+                ONBOARDING_WEEKLY_KM: [
+                    MessageHandler(
+                        filters.TEXT & ~filters.COMMAND, self._onboard_weekly_km
+                    )
+                ],
+                PREF_DAYS: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self._pref_days)
+                ],
+                PREF_TIME: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self._pref_time)
+                ],
+                PREF_VIBE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self._pref_vibe)
+                ],
+            },
+            fallbacks=[CommandHandler("cancel", self.cmd_cancel)],
+        )
+        app.add_handler(conv)
 
         self.application = app
 
         from admin.commands import register_admin_commands
 
         register_admin_commands(self)
-        logger.info("bot_initialized")
-
-        self.application = app
-        logger.info("bot_initialized")
 
         if self.config.bot_mode == "development":
             await app.initialize()
@@ -97,7 +137,7 @@ class CoachBot:
     def is_admin(self, chat_id: int) -> bool:
         return chat_id in self.config.admin_chat_ids
 
-    async def reply(self, update: Update, text: str) -> None:
+    async def reply(self, update: Update, text: str, keyboard=None) -> None:
         if update.message:
             await update.message.reply_text(text)
 
@@ -105,128 +145,222 @@ class CoachBot:
 
     async def cmd_start(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
+    ) -> Optional[int]:
         chat_id = update.effective_user.id if update.effective_user else 0
         existing = await self.db.get_runner(chat_id)
 
         if existing:
-            welcome = (
-                f"Welcome back, {existing.name or 'Runner'}!\n\n"
-                f"Current program: {existing.current_program or 'None'}\n"
-                f"Week {existing.week_of_program} | Phase: {existing.training_phase}\n"
-                f"Total runs: {existing.total_runs}\n"
-                f"30-day consistency: {existing.consistency_30d:.0%}\n\n"
-                "Commands: /plan  /log  /status  /metrics  /history  /help"
+            msg = (
+                f"Hey {existing.name}! 👋 Great to see you again!\n\n"
+                f"📊 *Your Status*\n"
+                f"Level: `{existing.running_level.value}` | Goal: `{existing.primary_goal.value}`\n"
+                f"Streak: {existing.streak_days} days 🔥\n"
+                f"Total runs: {existing.total_runs} 🏃\n\n"
+                f"Tap a button below or type a command!"
             )
-            await self.reply(update, welcome)
-            return
+            await self.reply(update, msg, keyboard=MAIN_KEYBOARD)
+            return ConversationHandler.END
 
-        runner = Runner(
-            chat_id=chat_id,
-            name=(
-                update.effective_user.first_name if update.effective_user else "Runner"
+        context.user_data["onboard_name"] = (
+            update.effective_user.first_name if update.effective_user else "Runner"
+        )
+        await self.reply(
+            update,
+            f"Hey {context.user_data['onboard_name']}! 👋\n\n"
+            f"Let's get to know you a bit so I can be your running buddy 🏃\n\n"
+            f"What's your running level?",
+            keyboard=ReplyKeyboardMarkup(
+                [
+                    [
+                        "\U0001f331 New (never run)",
+                        "\U0001f469\u200d\U0001f3eb Beginner (casual)",
+                    ],
+                    [
+                        "\U0001f3c3\u200d\u2640\ufe0f Intermediate (regular)",
+                        "\U0001f525 Advanced (pro)",
+                    ],
+                ],
+                resize_keyboard=True,
             ),
-            last_active=date.today(),
-        )
-        await self.db.create_runner(runner)
-
-        await self.reply(
-            update,
-            f"Welcome {runner.name}! Your profile is created. 🎉\n\n"
-            "Commands: /plan  /log  /status  /metrics  /history  /help",
-        )
-
-    async def onboarding_name(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> int:
-        if not update.message or not update.message.text:
-            return ONBOARDING_NAME
-        context.user_data["onboard_name"] = update.message.text.strip()
-        await self.reply(
-            update,
-            f"Nice to meet you, {context.user_data['onboard_name']}!\n\n"
-            "What's your running level?\n"
-            "1 - New (never run before)\n"
-            "2 - Beginner (run occasionally)\n"
-            "3 - Intermediate (run regularly)\n"
-            "4 - Advanced (experienced runner)",
         )
         return ONBOARDING_LEVEL
 
-    async def onboarding_level(
+    async def _onboard_level(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> int:
-        if not update.message or not update.message.text:
-            return ONBOARDING_LEVEL
-        text = update.message.text.strip()
+        text = (
+            update.message.text.strip()
+            if update.message and update.message.text
+            else ""
+        )
         level_map = {
-            "1": RunningLevel.NEW,
-            "2": RunningLevel.BEGINNER,
-            "3": RunningLevel.INTERMEDIATE,
-            "4": RunningLevel.ADVANCED,
             "new": RunningLevel.NEW,
             "beginner": RunningLevel.BEGINNER,
             "intermediate": RunningLevel.INTERMEDIATE,
             "advanced": RunningLevel.ADVANCED,
         }
-        level = level_map.get(text.lower())
+        level = None
+        for key, val in level_map.items():
+            if key in text.lower():
+                level = val
+                break
         if not level:
-            await self.reply(update, "Please enter 1, 2, 3, or 4.")
+            await self.reply(update, "Pick one of the options above!")
             return ONBOARDING_LEVEL
         context.user_data["onboard_level"] = level
+
         await self.reply(
             update,
-            "What's your primary running goal?\n"
-            "1 - Finish a 5K\n"
-            "2 - Improve 5K time\n"
-            "3 - Run a 10K\n"
-            "4 - Half marathon\n"
-            "5 - Marathon\n"
-            "6 - General fitness",
+            f"{'Nice!' if level == RunningLevel.NEW else 'Awesome!'} "
+            f"Now what's your main running goal?",
+            keyboard=ReplyKeyboardMarkup(
+                [
+                    ["\U0001f3c1 Finish a 5K", "\u23ec Improve my 5K time"],
+                    ["\U0001f3c3 Run a 10K", "\U0001f3c0 Half marathon"],
+                    ["\U0001f30d Marathon", "\U0001f4aa General fitness"],
+                ],
+                resize_keyboard=True,
+            ),
         )
         return ONBOARDING_GOAL
 
-    async def onboarding_goal(
+    async def _onboard_goal(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> int:
-        if not update.message or not update.message.text:
-            return ONBOARDING_GOAL
-        text = update.message.text.strip()
+        text = (
+            update.message.text.strip().lower()
+            if update.message and update.message.text
+            else ""
+        )
         goal_map = {
-            "1": PrimaryGoal.FINISH_5K,
-            "2": PrimaryGoal.IMPROVE_5K,
-            "3": PrimaryGoal.IMPROVE_10K,
-            "4": PrimaryGoal.HALF_MARATHON,
-            "5": PrimaryGoal.MARATHON,
-            "6": PrimaryGoal.GENERAL,
-            "finish 5k": PrimaryGoal.FINISH_5K,
+            "5k": PrimaryGoal.FINISH_5K,
             "improve 5k": PrimaryGoal.IMPROVE_5K,
             "10k": PrimaryGoal.IMPROVE_10K,
             "half marathon": PrimaryGoal.HALF_MARATHON,
             "marathon": PrimaryGoal.MARATHON,
             "general": PrimaryGoal.GENERAL,
         }
-        goal = goal_map.get(text.lower())
+        goal = None
+        for key, val in goal_map.items():
+            if key in text:
+                goal = val
+                break
         if not goal:
-            await self.reply(update, "Please enter 1-6.")
+            for key, val in goal_map.items():
+                if key[0] in text:
+                    goal = val
+                    break
+        if not goal:
+            await self.reply(update, "Pick one of the options above!")
             return ONBOARDING_GOAL
         context.user_data["onboard_goal"] = goal
+
         await self.reply(
             update,
-            "How many km do you currently run per week? (enter 0 if just starting)",
+            "Great choice! How many km do you currently run per week?\n"
+            "(Type 0 if you're just starting out!)",
         )
         return ONBOARDING_WEEKLY_KM
 
-    async def onboarding_weekly_km(
+    async def _onboard_weekly_km(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ) -> int:
-        if not update.message or not update.message.text:
-            return ONBOARDING_WEEKLY_KM
         try:
-            weekly_km = float(update.message.text.strip())
+            weekly_km = (
+                float(update.message.text.strip())
+                if update.message and update.message.text
+                else 0
+            )
         except ValueError:
-            await self.reply(update, "Please enter a number (e.g., 10 or 0).")
+            await self.reply(update, "Just type a number 🙂 like 10 or 0")
             return ONBOARDING_WEEKLY_KM
+        context.user_data["onboard_weekly"] = weekly_km
+
+        await self.reply(
+            update,
+            "How many days per week can you run?",
+            keyboard=ReplyKeyboardMarkup(
+                [["1-2 days", "3 days"], ["4 days", "5+ days"]],
+                resize_keyboard=True,
+            ),
+        )
+        return PREF_DAYS
+
+    async def _pref_days(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        text = (
+            update.message.text.strip()
+            if update.message and update.message.text
+            else "3"
+        )
+        days_map = {"1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
+        parts = text.split("-")
+        if len(parts) >= 2:
+            days = int(parts[1].split()[0]) if parts[1].split()[0].isdigit() else 3
+        else:
+            days = days_map.get(text[0], 3)
+        context.user_data["pref_days"] = days
+
+        await self.reply(
+            update,
+            "What time of day do you usually run?",
+            keyboard=ReplyKeyboardMarkup(
+                [
+                    ["\U0001f305 Morning", "\U0001f318 Lunch"],
+                    ["\U0001f307 Evening", "\u2753 No preference"],
+                ],
+                resize_keyboard=True,
+            ),
+        )
+        return PREF_TIME
+
+    async def _pref_time(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        text = (
+            update.message.text.strip().lower()
+            if update.message and update.message.text
+            else "morning"
+        )
+        time_map = {"morning": "morning", "lunch": "lunch", "evening": "evening"}
+        pref_time = "morning"
+        for key, val in time_map.items():
+            if key in text:
+                pref_time = val
+                break
+        context.user_data["pref_time"] = pref_time
+
+        await self.reply(
+            update,
+            "One last thing! What coaching style works for you?",
+            keyboard=ReplyKeyboardMarkup(
+                [
+                    ["\U0001f31f Push me hard!", "\U0001f49a Gentle encouragement"],
+                    ["\U0001f4ca Data & details", "\U0001f3af Just the essentials"],
+                ],
+                resize_keyboard=True,
+            ),
+        )
+        return PREF_VIBE
+
+    async def _pref_vibe(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
+        text = (
+            update.message.text.strip().lower()
+            if update.message and update.message.text
+            else ""
+        )
+        vibe = "casual"
+        if "push" in text or "hard" in text:
+            vibe = "motivational"
+        elif "gentle" in text or "encouragement" in text:
+            vibe = "gentle"
+        elif "data" in text or "detail" in text:
+            vibe = "detailed"
+        elif "essential" in text:
+            vibe = "concise"
 
         chat_id = update.effective_user.id if update.effective_user else 0
         runner = Runner(
@@ -234,19 +368,24 @@ class CoachBot:
             name=context.user_data.get("onboard_name", "Runner"),
             running_level=context.user_data.get("onboard_level", RunningLevel.NEW),
             primary_goal=context.user_data.get("onboard_goal", PrimaryGoal.GENERAL),
-            current_weekly_km=weekly_km,
+            current_weekly_km=context.user_data.get("onboard_weekly", 0),
+            preferred_days=str(context.user_data.get("pref_days", 3)),
+            preferred_time=context.user_data.get("pref_time", "morning"),
+            communication_style=vibe,
             last_active=date.today(),
         )
         await self.db.create_runner(runner)
 
         await self.reply(
             update,
-            f"Profile created! 🎉\n\n"
+            f"You're all set! 🎉\n\n"
             f"Name: {runner.name}\n"
             f"Level: {runner.running_level.value}\n"
             f"Goal: {runner.primary_goal.value}\n"
-            f"Weekly km: {runner.current_weekly_km}\n\n"
-            "Commands: /plan  /log  /status  /metrics  /history  /help",
+            f"Weekly: {runner.current_weekly_km}km | {context.user_data.get('pref_days', 3)}x/week\n\n"
+            f"Let's get those runs in! 🏃\n"
+            f"Hit \U0001f3c3 **/plan** for your first training plan!",
+            keyboard=MAIN_KEYBOARD,
         )
         logger.info("onboarding_complete", chat_id=chat_id)
         return ConversationHandler.END
@@ -278,16 +417,41 @@ class CoachBot:
     ) -> None:
         chat_id = update.effective_user.id if update.effective_user else 0
         if not self.coach:
-            await self.reply(update, "Coach engine is not available.")
+            await self.reply(
+                update, "Coach is taking a nap \U0001f634 try again later!"
+            )
             return
 
         if not await self.db.get_runner(chat_id):
-            await self.reply(update, "Please use /start to set up your profile first.")
+            await self.reply(
+                update, "Let's get to know each other first! Hit /start \U0001f44b"
+            )
             return
 
-        await self.reply(update, "🏃 Generating your personalized training plan...")
-        plan = await self.coach.generate_plan(chat_id)
-        await self.reply(update, plan)
+        thinking_msgs = [
+            "\U0001f3c3 Lacing up shoes...",
+            "\u2601\ufe0f Checking the weather...",
+            "\U0001f50d Consulting the running oracle...",
+            "\U0001f4ad Thinking about your goals...",
+            "\U0001f3af Fine-tuning the plan...",
+            "\u2728 Almost there!",
+        ]
+        await self.reply(update, thinking_msgs[0])
+
+        async def progress_updater():
+            for i in range(1, len(thinking_msgs)):
+                await asyncio.sleep(6)
+                try:
+                    await update.message.reply_text(thinking_msgs[i])
+                except Exception:
+                    pass
+
+        task = asyncio.create_task(progress_updater())
+        try:
+            plan = await self.coach.generate_plan(chat_id)
+            await self.reply(update, plan, keyboard=MAIN_KEYBOARD)
+        finally:
+            task.cancel()
 
     # ─── /log ───
 

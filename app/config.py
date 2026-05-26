@@ -14,6 +14,7 @@ class Config:
     openai_base_url: str | None = None
     openai_model: str = "gpt-4o-mini"
     openai_max_tokens: int = 2000
+    openai_timeout_sec: int = 300
     discord_bot_token: str | None = None
     whatsapp_twilio_account_sid: str | None = None
     whatsapp_twilio_auth_token: str | None = None
@@ -94,6 +95,7 @@ def load_config(env_file: str | None = None) -> Config:
         openai_base_url=os.getenv("OPENAI_BASE_URL") or None,
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
         openai_max_tokens=min(int(os.getenv("OPENAI_MAX_TOKENS", "2000")), 393216),
+        openai_timeout_sec=int(os.getenv("OPENAI_TIMEOUT_SEC", "300")),
         discord_bot_token=os.getenv("DISCORD_BOT_TOKEN") or None,
         whatsapp_twilio_account_sid=os.getenv("TWILIO_ACCOUNT_SID") or None,
         whatsapp_twilio_auth_token=os.getenv("TWILIO_AUTH_TOKEN") or None,
