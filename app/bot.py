@@ -13,6 +13,7 @@ from telegram.ext import (
     filters,
 )
 
+from app.coach import CoachEngine
 from app.config import Config
 from app.database import Database
 from app.knowledge import KnowledgeBase
@@ -26,11 +27,16 @@ ONBOARDING_NAME, ONBOARDING_LEVEL, ONBOARDING_GOAL, ONBOARDING_WEEKLY_KM = range
 
 class CoachBot:
     def __init__(
-        self, config: Config, db: Database, kb: KnowledgeBase | None = None
+        self,
+        config: Config,
+        db: Database,
+        kb: KnowledgeBase | None = None,
+        coach: CoachEngine | None = None,
     ) -> None:
         self.config = config
         self.db = db
         self.kb = kb
+        self.coach = coach
         self.application: Optional[Application] = None
 
     async def start_bot(self) -> Application:
@@ -66,6 +72,7 @@ class CoachBot:
             fallbacks=[CommandHandler("cancel", self.cmd_cancel)],
         )
         app.add_handler(onboarding_conv)
+        app.add_handler(CommandHandler("plan", self.cmd_plan))
 
         from admin.commands import register_admin_commands
 
@@ -253,6 +260,24 @@ class CoachBot:
             "Admin commands available to authorized users."
         )
         await self.reply(update, text)
+
+    # ─── /plan ───
+
+    async def cmd_plan(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not self.coach:
+            await self.reply(update, "Coach engine is not available.")
+            return
+
+        if not await self.db.get_runner(chat_id):
+            await self.reply(update, "Please use /start to set up your profile first.")
+            return
+
+        await self.reply(update, "🏃 Generating your personalized training plan...")
+        plan = await self.coach.generate_plan(chat_id)
+        await self.reply(update, plan)
 
     # ─── /cancel (onboarding fallback) ───
 

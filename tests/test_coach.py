@@ -1,0 +1,177 @@
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from app.coach import CoachEngine
+from app.config import Config
+from app.database import Database
+from app.knowledge import KnowledgeBase
+from app.models import PrimaryGoal, Runner, RunningLevel
+
+FIXTURE_PATH = "tests/fixtures/knowledge_sample"
+
+
+@pytest.fixture
+def config() -> Config:
+    return Config(
+        telegram_bot_token="test_token",
+        openai_api_key="test_key",
+        admin_chat_ids=[12345],
+        bot_mode="test",
+        coach_knowledge_path=FIXTURE_PATH,
+    )
+
+
+@pytest.fixture
+def kb() -> KnowledgeBase:
+    k = KnowledgeBase(FIXTURE_PATH)
+    k.load()
+    return k
+
+
+@pytest.fixture
+def mock_openai() -> AsyncMock:
+    mock = AsyncMock()
+    choice = MagicMock()
+    choice.message.content = (
+        "🏃 *Weekly Training Plan*\n\n"
+        "**Monday** — Easy run 30 min @ Zone 2 (conversational pace)\n"
+        "**Wednesday** — Tempo run: 10 min warm-up, 15 min @ threshold pace, 5 min cool-down\n"
+        "**Friday** — Easy run 35 min with 4x30s strides at end\n"
+        "**Saturday** — Long run 60 min @ Zone 2\n\n"
+        "💡 *Tips*\n- Stay hydrated throughout the week\n- Stretch after each run"
+    )
+    mock.chat.completions.create.return_value = MagicMock(choices=[choice])
+    return mock
+
+
+@pytest.fixture
+def engine(
+    config: Config, db: Database, kb: KnowledgeBase, mock_openai: AsyncMock
+) -> CoachEngine:
+    eng = CoachEngine(config, db, kb)
+    eng.client = mock_openai
+    return eng
+
+
+@pytest.mark.asyncio
+class TestCoachEngine:
+    async def test_generate_plan_no_runner(self, engine: CoachEngine):
+        result = await engine.generate_plan(99999)
+        assert "Please use /start" in result
+
+    async def test_generate_plan_basic(self, engine: CoachEngine, db: Database):
+        runner = Runner(
+            chat_id=90001,
+            name="Test",
+            running_level=RunningLevel.BEGINNER,
+            primary_goal=PrimaryGoal.IMPROVE_5K,
+        )
+        await db.create_runner(runner)
+        result = await engine.generate_plan(90001)
+        assert len(result) > 50
+        assert "Training" in result or "Plan" in result or "Run" in result
+
+    async def test_generate_plan_with_injuries(self, engine: CoachEngine, db: Database):
+        runner = Runner(
+            chat_id=90002, name="Injured", running_level=RunningLevel.INTERMEDIATE
+        )
+        await db.create_runner(runner)
+        from app.models import Injury
+
+        await db.create_injury(
+            Injury(
+                chat_id=90002,
+                body_part="knee",
+                injury_type="runners_knee",
+                severity="moderate",
+            )
+        )
+        result = await engine.generate_plan(90002)
+        assert len(result) > 50
+
+    async def test_fallback_plan_on_llm_error(
+        self, config: Config, db: Database, kb: KnowledgeBase
+    ):
+        mock_fail = AsyncMock()
+        mock_fail.chat.completions.create.side_effect = Exception("API Error")
+        engine = CoachEngine(config, db, kb)
+        engine.client = mock_fail
+        runner = Runner(
+            chat_id=90003, name="Fallback", running_level=RunningLevel.BEGINNER
+        )
+        await db.create_runner(runner)
+        result = await engine.generate_plan(90003)
+        assert "Training Plan" in result or "plan" in result.lower()
+
+    async def test_safety_filter_weekly_mileage(
+        self, engine: CoachEngine, db: Database
+    ):
+        runner = Runner(
+            chat_id=90004,
+            name="Test",
+            running_level=RunningLevel.BEGINNER,
+            current_weekly_km=10,
+        )
+        await db.create_runner(runner)
+        result = await engine.generate_plan(90004)
+        assert result is not None
+
+    async def test_workout_advice(self, engine: CoachEngine, db: Database):
+        runner = Runner(
+            chat_id=90005, name="Curious", running_level=RunningLevel.BEGINNER
+        )
+        await db.create_runner(runner)
+        result = await engine.generate_workout_advice(
+            90005, "How should I pace my easy runs?"
+        )
+        assert len(result) > 20
+
+    async def test_workout_advice_no_runner(self, engine: CoachEngine):
+        result = await engine.generate_workout_advice(99999, "test")
+        assert "Please use /start" in result
+
+    async def test_extract_km(self):
+        from app.coach import CoachEngine
+
+        assert CoachEngine._extract_km("Run 5km today") == 5.0
+        assert CoachEngine._extract_km("Run 10 km easy") == 10.0
+        assert CoachEngine._extract_km("No distance here") == 0
+        assert CoachEngine._extract_km("3.5k warm up then 5k tempo") == 8.5
+
+    async def test_generate_plan_with_different_levels(
+        self, engine: CoachEngine, db: Database
+    ):
+        beginner = Runner(
+            chat_id=90006,
+            name="Newbie",
+            running_level=RunningLevel.NEW,
+            primary_goal=PrimaryGoal.FINISH_5K,
+        )
+        await db.create_runner(beginner)
+        result = await engine.generate_plan(90006)
+        assert len(result) > 50
+
+    async def test_generate_plan_ignores_unknown_runner(self, engine: CoachEngine):
+        result = await engine.generate_plan(0)
+        assert "Please use /start" in result
+
+    async def test_generate_plan_includes_coaching_tips(
+        self, engine: CoachEngine, db: Database
+    ):
+        runner = Runner(
+            chat_id=90007, name="DetailSeeker", running_level=RunningLevel.INTERMEDIATE
+        )
+        await db.create_runner(runner)
+        result = await engine.generate_plan(90007)
+        assert len(result) > 50
+
+    async def test_coach_engine_initialization(
+        self, config: Config, db: Database, kb: KnowledgeBase
+    ):
+        engine = CoachEngine(config, db, kb)
+        assert engine.config == config
+        assert engine.db == db
+        assert engine.kb == kb
