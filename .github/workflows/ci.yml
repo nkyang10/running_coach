@@ -1,0 +1,85 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov ruff black
+
+      - name: Create test .env
+        run: |
+          echo "TELEGRAM_BOT_TOKEN=test:token" >> .env
+          echo "OPENAI_API_KEY=sk-test" >> .env
+          echo "ADMIN_CHAT_IDS=12345" >> .env
+          echo "BOT_MODE=development" >> .env
+
+      - name: Seed test knowledge base
+        run: python scripts/seed_test_kb.py
+
+      - name: Run unit tests
+        run: pytest tests/ -v --cov=app --cov-report=term-missing
+        env:
+          COACH_TEST_MODE: 1
+          COACH_KNOWLEDGE_PATH: tests/fixtures/knowledge_sample
+
+      - name: Code quality
+        run: |
+          ruff check app/
+          black --check app/ tests/ --quiet || echo "⚠️ Format check failed (auto-fix with: black app/ tests/)"
+
+  auto-merge-develop:
+    needs: test
+    if: github.event_name == 'pull_request' && github.base_ref == 'develop'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-merge PR to develop
+        run: |
+          gh pr merge ${{ github.event.pull_request.number }} \
+            --merge --auto --delete-branch \
+            --subject "Auto-merge: ${{ github.event.pull_request.title }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  auto-merge-main:
+    needs: test
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-merge PR to main
+        run: |
+          gh pr merge ${{ github.event.pull_request.number }} \
+            --merge --auto --delete-branch \
+            --subject "Auto-merge: ${{ github.event.pull_request.title }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          curl -X POST ${{ secrets.PRODUCTION_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -H "X-Deploy-Token: ${{ secrets.DEPLOY_TOKEN }}" \
+            -d '{"repo": "coach", "branch": "main", "commit": "${{ github.sha }}"}'
