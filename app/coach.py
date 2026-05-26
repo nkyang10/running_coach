@@ -446,6 +446,124 @@ class CoachEngine:
 
         return ""
 
+    PATTERNS = {
+        "injury": [
+            (
+                r"(?:my\s+)?(shins?|knee|achilles|hip|foot|heel|ankle|back)\s+(hurt|pain|sore|ache)",
+                "add_injury",
+            ),
+            (
+                r"(?:i have|got|developed|suffering from)\s+(shin splints|runners? knee|plantar fasciitis|itbs|achilles tendinopathy)",
+                "add_injury",
+            ),
+        ],
+        "goal": [
+            (
+                r"i want to (?:run|finish|complete)\s+(?:a\s+)?(5k|5km|10k|10km|half marathon|marathon)",
+                "update_goal",
+            ),
+            (
+                r"i(?:'m|\s+am)\s+(?:training|preparing)\s+for\s+(?:a\s+)?(5k|10k|half marathon|marathon)",
+                "update_goal",
+            ),
+        ],
+        "schedule": [
+            (r"i can only run (\d+) days?\s+(?:a|per)\s+week", "update_schedule"),
+            (
+                r"i(?:'m|\s+am)\s+(?:traveling|on vacation|away)\s+(?:next|this)\s+week",
+                "note_travel",
+            ),
+        ],
+        "shoe": [
+            (r"i got new shoes", "add_shoe"),
+            (r"new running shoes", "add_shoe"),
+        ],
+        "fatigue": [
+            (r"legs feel heavy", "note_fatigue"),
+            (r"i(?:'m|\s+am)\s+(?:exhausted|so tired|really tired)", "check_recovery"),
+        ],
+    }
+
+    async def process_conversation(self, chat_id: int, message: str) -> Optional[str]:
+        message_lower = message.lower()
+        for category, patterns in self.PATTERNS.items():
+            for pattern, action in patterns:
+                match = re.search(pattern, message_lower)
+                if match:
+                    if action == "add_injury":
+                        body_part = (
+                            match.group(1)
+                            if match.lastindex and match.lastindex >= 1
+                            else match.group(0)
+                        )
+                        from app.models import Injury as InjuryModel
+
+                        injury = InjuryModel(
+                            chat_id=chat_id,
+                            body_part=(
+                                body_part
+                                if body_part
+                                in (
+                                    "shin",
+                                    "knee",
+                                    "achilles",
+                                    "hip",
+                                    "foot",
+                                    "heel",
+                                    "ankle",
+                                    "back",
+                                )
+                                else "other"
+                            ),
+                            description=message[:200],
+                            source="conversation",
+                        )
+                        await self.db.create_injury(injury)
+                        return f"I've noted your {body_part} issue. Take it easy — listen to your body."
+
+                    elif action == "update_goal":
+                        goal_text = match.group(1) if match.lastindex else "5k"
+                        goal_map = {
+                            "5k": "improve_5k",
+                            "5km": "improve_5k",
+                            "10k": "10k",
+                            "10km": "10k",
+                            "half marathon": "half_marathon",
+                            "marathon": "marathon",
+                        }
+                        new_goal = goal_map.get(goal_text, "general")
+                        runner = await self.db.get_runner(chat_id)
+                        if runner:
+                            from app.models import PrimaryGoal
+
+                            runner.primary_goal = PrimaryGoal(new_goal)
+                            await self.db.update_runner(runner)
+                            return (
+                                f"Great goal! I've updated your target to {goal_text}."
+                            )
+
+                    elif action == "add_shoe":
+                        return "Nice! What brand and model are your new shoes? Use /shoes add <name> [type] to register them."
+
+                    elif action == "note_fatigue":
+                        runner = await self.db.get_runner(chat_id)
+                        if runner:
+                            runner.fatigue_level = min(5, runner.fatigue_level + 1)
+                            await self.db.update_runner(runner)
+                            return "Sounds like you could use some rest. Consider an easy recovery run or a rest day."
+
+                    elif action == "check_recovery":
+                        return "How's your sleep been? Try prioritizing rest and an easy day."
+
+                    elif action == "note_travel":
+                        runner = await self.db.get_runner(chat_id)
+                        if runner:
+                            runner.fatigue_level = min(5, runner.fatigue_level + 1)
+                            await self.db.update_runner(runner)
+                            return "Travel can disrupt training. Let's plan some easy maintenance runs."
+
+        return None
+
     async def update_runner_from_adaptation(self, chat_id: int) -> None:
         runner = await self.db.get_runner(chat_id)
         if not runner:

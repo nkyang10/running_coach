@@ -7,7 +7,6 @@ Usage:
   python scripts/backup.py --keep 7     # Keep last N backups (auto-cleanup)
 """
 
-import shutil
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -76,8 +75,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Backup coach data")
-    parser.add_argument("--keep", type=int, default=7,
-                        help="Number of backups to keep (default: 7)")
+    parser.add_argument(
+        "--keep", type=int, default=7, help="Number of backups to keep (default: 7)"
+    )
     args = parser.parse_args()
 
     backup_path = create_backup()

@@ -27,7 +27,6 @@ FILES = {
 - Recovery IS training. Sleep, nutrition, and rest days are part of the plan.
 - Cross-training is not optional — core work, strength training, and mobility prevent injuries.
 """,
-
     "admin-guidelines.md": """# Admin Guidelines for AI Behavior
 
 ## Rules for the AI Running Coach
@@ -59,7 +58,6 @@ FILES = {
    3. programs/ (race plans)
    4. workouts/ (individual session types)
 """,
-
     # ───────── WORKOUT TYPES ─────────
     "workouts/easy-run.md": """# Easy Run (Zone 2)
 
@@ -90,7 +88,6 @@ This is the foundation — 80% of all running.
 - Intermediate: 45-75 min
 - Advanced: 60-90 min
 """,
-
     "workouts/tempo-run.md": """# Tempo Run (Threshold)
 
 ## Purpose
@@ -116,7 +113,6 @@ This is "comfortably hard" running.
 - 10 min easy jog cool-down
 - Dynamic stretches before, static after
 """,
-
     "workouts/interval-training.md": """# Interval Training (VO2max)
 
 ## Purpose
@@ -147,7 +143,6 @@ Improve VO2max and running economy. These are the HARD days.
 - Skip if fatigued, sore, or sleep-deprived
 - Track surface preferred over concrete
 """,
-
     "workouts/long-run.md": """# Long Run
 
 ## Purpose
@@ -177,7 +172,6 @@ The cornerstone of distance running.
 - Eat within 30 min of finishing (carbs + protein)
 - Extra sleep the night before and after
 """,
-
     "workouts/recovery-run.md": """# Recovery Run
 
 ## Purpose
@@ -199,7 +193,6 @@ NOT a training stimulus. This is maintenance, not improvement.
 - 30-45 min walk is equally effective
 - Light cycling or swimming works too
 """,
-
     "workouts/strides.md": """# Strides
 
 ## Purpose
@@ -226,7 +219,6 @@ Not a workout — a drill appended to easy runs.
 - Start with 4 strides, add 1 per week until 8
 - Beginner: wait 2 months before adding strides
 """,
-
     "workouts/hill-repeats.md": """# Hill Repeats
 
 ## Purpose
@@ -253,7 +245,6 @@ Build leg strength, power, and running economy.
 - Avoid steep downhills for recovery jogging (stresses knees)
 - If the hill flattens at the top, stop there
 """,
-
     # ───────── CROSS-TRAINING ─────────
     "cross-training/strength-for-runners.md": """# Strength Training for Runners
 
@@ -290,7 +281,6 @@ Stronger runners are faster runners.
 - Bodyweight → Add resistance bands → Add dumbbells
 - Always prioritize form over weight
 """,
-
     "cross-training/mobility.md": """# Mobility for Runners
 
 ## Daily (5-10 min)
@@ -312,7 +302,6 @@ Stronger runners are faster runners.
 2. Hips (extension + rotation) → affects power and IT band
 3. Thoracic spine (rotation) → affects arm swing and breathing
 """,
-
     "cross-training/injury-prevention.md": """# Injury Prevention Exercises
 
 ## The Big 4 (2-3× per week)
@@ -346,7 +335,6 @@ Stronger runners are faster runners.
 - Sharp/stabbing sensation (not dull ache)
 - Swelling, bruising, or instability
 """,
-
     # ───────── PROGRAMS ─────────
     "programs/couch-to-5k.md": """# Couch to 5K (Beginner)
 
@@ -389,7 +377,6 @@ Mon: Run | Wed: Run | Fri: Run | Rest all other days
 - First continuous 20 min run
 - First 5K finish
 """,
-
     "programs/5k-improver.md": """# 5K Improver (Intermediate)
 
 ## Goal
@@ -435,7 +422,6 @@ Improve 5K time. Already running 3-4×/week, 15-25 km/week.
 - Tempo: Race pace + 15-20 sec/km
 - Intervals: Race pace
 """,
-
     "programs/half-marathon.md": """# Half Marathon Plan (12 Weeks)
 
 ## Prerequisites
@@ -486,7 +472,6 @@ Improve 5K time. Already running 3-4×/week, 15-25 km/week.
 - Practice race-day nutrition on long runs
 - Nothing new on race day
 """,
-
     # ───────── RULES ─────────
     "rules/pace-zones.md": """# Pace & Heart Rate Zones
 
@@ -518,7 +503,6 @@ Improve 5K time. Already running 3-4×/week, 15-25 km/week.
 - Field test: Warm up 15 min → Run 3 min hard uphill → Jog 2 min → Run 3 min hard uphill → Note highest HR
 - Or: Use a recent 5K race — peak HR in last km
 """,
-
     "rules/progression-rules.md": """# Progression Rules for Running
 
 ## The 10% Rule
@@ -552,7 +536,6 @@ Improve 5K time. Already running 3-4×/week, 15-25 km/week.
 - The body adapts during plateaus too
 - Not every week needs to be bigger than the last
 """,
-
     "rules/deload-taper.md": """# Deload & Taper Weeks
 
 ## Deload (Training Cycle Recovery)
@@ -599,7 +582,6 @@ Improve 5K time. Already running 3-4×/week, 15-25 km/week.
 - Trying to make up missed training during taper
 - Eating differently than normal
 """,
-
     "rules/injury-guide.md": """# Running Injury Guide
 
 ## Warning Signs
@@ -655,7 +637,6 @@ Improve 5K time. Already running 3-4×/week, 15-25 km/week.
 After any injury break > 2 weeks: start at 50% of pre-injury mileage.
 Build back over the same number of weeks you were off.
 """,
-
     "rules/shoe-guide.md": """# Running Shoe Guide
 
 ## When to Replace
@@ -706,7 +687,7 @@ Curated training knowledge for the AI Running Coach.
 Edit files to customize. After editing: `/admin_reload` in the bot.
 All changes tracked in git.
 """)
-    print(f"  ✅ README.md")
+    print("  ✅ README.md")
     print(f"\nDone: {len(FILES)} knowledge files seeded")
 
 

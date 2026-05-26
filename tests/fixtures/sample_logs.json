@@ -1,0 +1,65 @@
+[
+  {
+    "text": "5k in 25min, felt easy RPE 5",
+    "expected": {
+      "distance_km": 5,
+      "duration_sec": 1500,
+      "rpe": 5,
+      "run_type": "easy"
+    }
+  },
+  {
+    "text": "tempo run 8km in 40 minutes, hard effort RPE 8",
+    "expected": {
+      "distance_km": 8,
+      "duration_sec": 2400,
+      "rpe": 8,
+      "run_type": "tempo"
+    }
+  },
+  {
+    "text": "interval session: 5x1km with 2min rest, RPE 9",
+    "expected": {
+      "distance_km": 5,
+      "duration_sec": null,
+      "rpe": 9,
+      "run_type": "interval"
+    }
+  },
+  {
+    "text": "long run 15km easy pace",
+    "expected": {
+      "distance_km": 15,
+      "duration_sec": null,
+      "rpe": null,
+      "run_type": "long_run"
+    }
+  },
+  {
+    "text": "recovery jog 30 min",
+    "expected": {
+      "distance_km": null,
+      "duration_sec": 1800,
+      "rpe": null,
+      "run_type": "recovery"
+    }
+  },
+  {
+    "text": "5 miles in 45 min RPE 7",
+    "expected": {
+      "distance_km": 8.05,
+      "duration_sec": 2700,
+      "rpe": 7,
+      "run_type": null
+    }
+  },
+  {
+    "text": "easy run felt good",
+    "expected": {
+      "distance_km": null,
+      "duration_sec": null,
+      "rpe": null,
+      "run_type": "easy"
+    }
+  }
+]
