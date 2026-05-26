@@ -588,6 +588,7 @@ class CoachBot:
 
         text = (
             "🔧 Admin Commands\n\n"
+            "/admin_health - Full service health report\n"
             "/admin_status - System status\n"
             "/admin_help - Admin command list\n"
             "/admin_reload - Reload knowledge base\n"
@@ -595,6 +596,18 @@ class CoachBot:
             "/admin_knowledge - Manage knowledge base\n"
         )
         await self.reply(update, text)
+
+    async def cmd_admin_health(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not self.is_admin(chat_id):
+            await self.reply(update, "Sorry, this command is for admins only.")
+            return
+        from admin.system_manager import get_health_report
+
+        report = await get_health_report(self.db, self.kb, self.config)
+        await self.reply(update, report)
 
     async def cmd_admin_reload(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE

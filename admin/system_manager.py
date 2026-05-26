@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -70,6 +71,111 @@ async def create_backup(
 
     logger.info("backup_created", path=str(zip_name))
     return str(zip_name)
+
+
+_start_time = time.time()
+
+
+async def get_health_report(
+    db: Database, kb: Optional[KnowledgeBase] = None, config: Optional[any] = None
+) -> str:
+    import psutil
+
+    checks = []
+    status = "✅ ALL GOOD"
+
+    # DB health
+    try:
+        row = await db.fetchone("SELECT 1 AS ok")
+        db_ok = row is not None and row["ok"] == 1
+        checks.append(("Database", "✅" if db_ok else "❌"))
+        if not db_ok:
+            status = "⚠️  ISSUES DETECTED"
+    except Exception as e:
+        checks.append(("Database", f"❌ {e}"))
+        status = "⚠️  ISSUES DETECTED"
+
+    # KB health
+    if kb:
+        kb_count = len(kb.get_all())
+        checks.append(("Knowledge Base", f"✅ {kb_count} files"))
+    else:
+        checks.append(("Knowledge Base", "⚠️  not loaded"))
+        status = "⚠️  ISSUES DETECTED"
+
+    # Runner counts
+    try:
+        runner_count = await db.get_runner_count()
+        checks.append(("Registered Runners", str(runner_count)))
+    except Exception as e:
+        checks.append(("Registered Runners", f"❌ {e}"))
+        status = "⚠️  ISSUES DETECTED"
+
+    # Run stats
+    try:
+        total_runs = (await db.fetchone("SELECT COUNT(*) as cnt FROM runs"))["cnt"]
+        weekly_runs = (
+            await db.fetchone(
+                "SELECT COUNT(*) as cnt FROM runs WHERE run_date >= date('now', '-7 days')"
+            )
+        )["cnt"]
+        checks.append(("Total Runs", str(total_runs)))
+        checks.append(("Runs This Week", str(weekly_runs)))
+    except Exception as e:
+        checks.append(("Runs", f"❌ {e}"))
+        status = "⚠️  ISSUES DETECTED"
+
+    # Active injuries
+    try:
+        injuries = (
+            await db.fetchone("SELECT COUNT(*) as cnt FROM injuries WHERE active = 1")
+        )["cnt"]
+        checks.append(("Active Injuries", str(injuries)))
+    except Exception:
+        pass
+
+    # Uptime
+    uptime_sec = int(time.time() - _start_time)
+    hours, remainder = divmod(uptime_sec, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    checks.append(("Uptime", f"{hours}h {minutes}m {seconds}s"))
+
+    # Disk
+    try:
+        disk = psutil.disk_usage(".")
+        free_gb = disk.free / (1024**3)
+        checks.append(("Disk Free", f"{free_gb:.1f} GB"))
+        if free_gb < 1:
+            checks.append(("⚠️  Low Disk", "Less than 1 GB free"))
+            status = "⚠️  ISSUES DETECTED"
+    except Exception:
+        checks.append(("Disk", "N/A"))
+
+    # Memory
+    try:
+        mem = psutil.virtual_memory()
+        mem_pct = mem.percent
+        checks.append(("Memory", f"{mem_pct:.0f}% used"))
+        if mem_pct > 90:
+            checks.append(("⚠️  High Memory", f"{mem_pct:.0f}% used"))
+            status = "⚠️  ISSUES DETECTED"
+    except Exception:
+        checks.append(("Memory", "N/A"))
+
+    # Config info
+    if config:
+        checks.append(("Mode", config.bot_mode))
+        checks.append(("DB Path", config.coach_db_path))
+
+    # Build report
+    lines = [
+        "🏥 *Service Health Report*\n",
+        f"**Status:** {status}\n",
+    ]
+    for label, value in checks:
+        lines.append(f"**{label}:** {value}")
+
+    return "\n".join(lines)
 
 
 async def git_commit_knowledge(path: str, message: str) -> str:

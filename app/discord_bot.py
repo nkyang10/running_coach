@@ -108,6 +108,18 @@ class DiscordBot:
                 return
             await ctx.reply(await self.service.get_admin_status())
 
+        @bot.command(name="admin_health")
+        async def cmd_admin_health(ctx: commands.Context):
+            if not self.is_admin(ctx.author.id):
+                await ctx.reply("Sorry, this command is for admins only.")
+                return
+            from admin.system_manager import get_health_report
+
+            report = await get_health_report(
+                self.service.db, self.service.kb, self.config
+            )
+            await ctx.reply(report)
+
         @bot.command(name="admin_help")
         async def cmd_admin_help(ctx: commands.Context):
             if not self.is_admin(ctx.author.id):

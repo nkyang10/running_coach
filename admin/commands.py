@@ -16,6 +16,7 @@ def register_admin_commands(bot: CoachBot) -> None:
 
     handlers = [
         CommandHandler("admin_status", bot.cmd_admin_status),
+        CommandHandler("admin_health", bot.cmd_admin_health),
         CommandHandler("admin_help", bot.cmd_admin_help),
         CommandHandler("admin_reload", bot.cmd_admin_reload),
         CommandHandler("admin_backup", bot.cmd_admin_backup),
