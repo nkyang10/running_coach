@@ -1,8 +1,12 @@
-# AI Running Coach
+# AI Running Coach — DRAFT
+
+> **⚠️ DRAFT — NOT FOR PRODUCTION USE**
+> This is a development prototype. Features are incomplete, untested at scale, and subject to change.
+> Do not deploy with real users or real API keys in production mode.
 
 A multi-runner AI coaching assistant with a curated running knowledge base. Generates personalized training plans via OpenAI, tracks progress, adapts to fatigue and injuries, and provides intelligent coaching through Telegram.
 
-> Version: 1.0 | Target: Windows VM (no Docker) | License: MIT (code), CC-BY-NC (knowledge)
+> Version: 0.1 (draft) | Target: Windows VM (no Docker) | License: MIT (code), CC-BY-NC (knowledge)
 
 ---
 
