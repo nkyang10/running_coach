@@ -10,6 +10,7 @@ from app.config import ensure_db_path, load_config
 from app.database import Database
 from app.discord_bot import DiscordBot
 from app.knowledge import KnowledgeBase
+from app.whatsapp_bot import WhatsAppBot
 from app.logger import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -80,6 +81,14 @@ async def main() -> int:
         logger.info("discord_bot_started")
     else:
         logger.info("discord_bot_disabled_no_token")
+
+    if config.whatsapp_twilio_account_sid and config.whatsapp_twilio_auth_token and config.whatsapp_from_number:
+        whatsapp_bot = WhatsAppBot(config, service)
+        logger.info("whatsapp_bot_starting")
+        asyncio.create_task(whatsapp_bot.start(port=9000))
+        logger.info("whatsapp_bot_started")
+    else:
+        logger.info("whatsapp_bot_disabled_no_creds")
 
     if config.bot_mode == "development":
         try:

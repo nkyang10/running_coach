@@ -22,8 +22,12 @@ class CoachService:
         self.kb = kb
         self.coach = coach
 
-    def is_admin(self, chat_id: int) -> bool:
-        return chat_id in self.config.admin_chat_ids
+    def is_admin(self, user_id: int | str) -> bool:
+        if isinstance(user_id, int):
+            return user_id in self.config.admin_chat_ids
+        if isinstance(user_id, str):
+            return user_id in self.config.whatsapp_admin_numbers
+        return False
 
     async def get_or_create_runner(self, chat_id: int) -> Optional[Runner]:
         return await self.db.get_runner(chat_id)

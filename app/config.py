@@ -15,6 +15,10 @@ class Config:
     openai_model: str = "gpt-4o-mini"
     openai_max_tokens: int = 2000
     discord_bot_token: str | None = None
+    whatsapp_twilio_account_sid: str | None = None
+    whatsapp_twilio_auth_token: str | None = None
+    whatsapp_from_number: str | None = None
+    whatsapp_admin_numbers: list[str] = field(default_factory=list)
     anthropic_api_key: str | None = None
     admin_chat_ids: list[int] = field(default_factory=list)
     bot_mode: str = "development"
@@ -73,6 +77,9 @@ def load_config(env_file: str | None = None) -> Config:
     except ValueError:
         qc_interval = 60
 
+    whatsapp_admins_str = os.getenv("WHATSAPP_ADMIN_NUMBERS", "")
+    whatsapp_admins = [n.strip() for n in whatsapp_admins_str.split(",") if n.strip()]
+
     use_real_llm = os.getenv("COACH_USE_REAL_LLM", "false").lower() in (
         "true",
         "1",
@@ -84,8 +91,12 @@ def load_config(env_file: str | None = None) -> Config:
         openai_api_key=openai_key,
         openai_base_url=os.getenv("OPENAI_BASE_URL") or None,
         openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        openai_max_tokens=int(os.getenv("OPENAI_MAX_TOKENS", "2000")),
+        openai_max_tokens=min(int(os.getenv("OPENAI_MAX_TOKENS", "2000")), 393216),
         discord_bot_token=os.getenv("DISCORD_BOT_TOKEN") or None,
+        whatsapp_twilio_account_sid=os.getenv("TWILIO_ACCOUNT_SID") or None,
+        whatsapp_twilio_auth_token=os.getenv("TWILIO_AUTH_TOKEN") or None,
+        whatsapp_from_number=os.getenv("WHATSAPP_FROM_NUMBER") or None,
+        whatsapp_admin_numbers=whatsapp_admins,
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
         admin_chat_ids=admin_ids,
         bot_mode=mode,

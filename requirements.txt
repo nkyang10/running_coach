@@ -16,6 +16,8 @@ python-dotenv>=1.0
 structlog>=24.0
 rich>=13.0
 psutil>=5.9
+aiohttp>=3.9
+twilio>=8.0
 
 # Testing
 pytest>=8.0
