@@ -278,6 +278,7 @@ class CoachBot:
             "/metrics - Track body metrics (e.g., /metrics weight 72)\n"
             "/history - View recent runs\n\n"
             "💬 Just chat with me about your running!\n"
+            "Also available on Discord + WhatsApp.\n"
             "Admin commands available to authorized users."
         )
         await self.reply(update, text)

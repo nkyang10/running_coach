@@ -60,7 +60,9 @@ class DiscordBot:
         async def cmd_help(ctx: commands.Context):
             if not self._check_rate_limit(ctx.author.id):
                 return
-            await ctx.reply(await self.service.get_help_message())
+            msg = await self.service.get_help_message()
+            msg += "\nAlso available on Telegram + WhatsApp."
+            await ctx.reply(msg)
 
         @bot.command(name="plan")
         async def cmd_plan(ctx: commands.Context):
