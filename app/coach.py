@@ -111,7 +111,7 @@ class CoachEngine:
                     {"role": "user", "content": user_prompt},
                 ],
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=self.config.openai_max_tokens,
             )
             plan = (
                 response.choices[0].message.content
@@ -160,7 +160,7 @@ class CoachEngine:
                     {"role": "user", "content": question},
                 ],
                 temperature=0.5,
-                max_tokens=1000,
+                max_tokens=self.config.openai_max_tokens,
             )
             return (
                 response.choices[0].message.content
@@ -320,7 +320,7 @@ class CoachEngine:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.1,
-                max_tokens=300,
+                max_tokens=min(1000, self.config.openai_max_tokens),
             )
             content = response.choices[0].message.content or "{}"
             content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
