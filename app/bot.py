@@ -81,9 +81,6 @@ class CoachBot:
         conv = ConversationHandler(
             entry_points=[CommandHandler("start", self.cmd_start)],
             states={
-                ONBOARDING_NAME: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self._onboard_name)
-                ],
                 ONBOARDING_LEVEL: [
                     MessageHandler(filters.TEXT & ~filters.COMMAND, self._onboard_level)
                 ],
