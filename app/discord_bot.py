@@ -97,12 +97,6 @@ class DiscordBot:
                 return
             await ctx.reply(await self.service.get_history(ctx.author.id))
 
-        @bot.command(name="shoes")
-        async def cmd_shoes(ctx: commands.Context, *, args: str = ""):
-            if not self._check_rate_limit(ctx.author.id):
-                return
-            await ctx.reply(await self.service.handle_shoes(ctx.author.id, args))
-
         @bot.command(name="admin_status")
         async def cmd_admin_status(ctx: commands.Context):
             if not self.is_admin(ctx.author.id):

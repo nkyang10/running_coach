@@ -575,10 +575,6 @@ class CoachEngine:
                 "note_travel",
             ),
         ],
-        "shoe": [
-            (r"i got new shoes", "add_shoe"),
-            (r"new running shoes", "add_shoe"),
-        ],
         "fatigue": [
             (r"legs feel heavy", "note_fatigue"),
             (r"i(?:'m|\s+am)\s+(?:exhausted|so tired|really tired)", "check_recovery"),
@@ -642,9 +638,6 @@ class CoachEngine:
                             return (
                                 f"Great goal! I've updated your target to {goal_text}."
                             )
-
-                    elif action == "add_shoe":
-                        return "Nice! What brand and model are your new shoes? Use /shoes add <name> [type] to register them."
 
                     elif action == "note_fatigue":
                         runner = await self.db.get_runner(chat_id)

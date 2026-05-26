@@ -30,19 +30,18 @@ PREF_DAYS, PREF_TIME, PREF_VIBE = range(4, 7)
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
     [
-        ["/plan", "/record", "/shoes"],
-        ["/status", "/history", "/metrics"],
-        ["/help"],
+        ["/plan", "/record", "/status"],
+        ["/history", "/metrics", "/help"],
     ],
     resize_keyboard=True,
 )
 
 ADMIN_KEYBOARD = ReplyKeyboardMarkup(
     [
-        ["/plan", "/record", "/shoes"],
-        ["/status", "/history", "/metrics"],
+        ["/plan", "/record", "/status"],
+        ["/history", "/metrics", "/help"],
         ["/admin_health", "/admin_backup", "/admin_reload"],
-        ["/admin_knowledge", "/help"],
+        ["/admin_knowledge"],
     ],
     resize_keyboard=True,
 )
@@ -91,7 +90,6 @@ class CoachBot:
         app.add_handler(CommandHandler("status", self.cmd_status))
         app.add_handler(CommandHandler("history", self.cmd_history))
         app.add_handler(CommandHandler("metrics", self.cmd_metrics))
-        app.add_handler(CommandHandler("shoes", self.cmd_shoes))
         app.add_handler(CommandHandler("cancel", self.cmd_cancel))
 
         app.add_handler(
@@ -475,7 +473,6 @@ class CoachBot:
             ("workout", ["/plan", "/record"]),
             ("pace", ["/plan", "/status"]),
             ("goal", ["/start", "/status"]),
-            ("shoe", ["/shoes"]),
             ("weight", ["/metrics"]),
             ("sleep", ["/metrics"]),
             ("hurt", ["/start"]),
@@ -772,64 +769,6 @@ class CoachBot:
         await self.reply(update, "\n".join(lines))
 
     # ─── /shoes ───
-
-    async def cmd_shoes(
-        self, update: Update, context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        chat_id = update.effective_user.id if update.effective_user else 0
-        if not await self.db.get_runner(chat_id):
-            await self.reply(update, "Please use /start to set up your profile first.")
-            return
-
-        from app.models import Shoe as ShoeModel
-
-        text = update.message.text if update.message and update.message.text else ""
-        args = text[7:].strip().lower()
-
-        if not args or args == "list":
-            shoes = await self.db.get_shoes(chat_id)
-            if not shoes:
-                await self.reply(
-                    update, "No shoes registered. Use:\n/shoes add <name> [type]"
-                )
-                return
-            lines = ["👟 *Your Shoes*\n"]
-            for s in shoes:
-                retired = " (retired)" if s.retired else ""
-                lines.append(f"- {s.name} [{s.type}]: {s.km_on_shoes:.0f}km{retired}")
-            await self.reply(update, "\n".join(lines))
-
-        elif args.startswith("add "):
-            parts = args[4:].rsplit(" ", 1)
-            name = parts[0]
-            shoe_type = (
-                parts[1]
-                if len(parts) > 1
-                and parts[1] in ("daily_trainer", "speed", "race", "trail")
-                else "daily_trainer"
-            )
-            shoe = ShoeModel(chat_id=chat_id, name=name, type=shoe_type)
-            await self.db.create_shoe(shoe)
-            await self.reply(update, f"✅ Added shoe: {name} ({shoe_type})")
-
-        elif args.startswith("retire "):
-            name = args[7:].strip()
-            shoes = await self.db.get_shoes(chat_id)
-            for s in shoes:
-                if s.name.lower() == name:
-                    s.retired = True
-                    await self.db.update_shoe(s)
-                    await self.reply(
-                        update, f"✅ Retired: {s.name} ({s.km_on_shoes:.0f}km used)"
-                    )
-                    return
-            await self.reply(update, f"Shoe not found: {name}")
-
-        else:
-            await self.reply(
-                update,
-                "Usage:\n/shoes list\n/shoes add <name> [type]\n/shoes retire <name>",
-            )
 
     # ─── /cancel (onboarding fallback) ───
 

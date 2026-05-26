@@ -126,9 +126,6 @@ class WhatsAppBot:
         if cmd == "/history":
             return await self.service.get_history(from_number)
 
-        if cmd == "/shoes":
-            return await self.service.handle_shoes(from_number, args)
-
         if cmd in (
             "/admin_status",
             "/admin_health",

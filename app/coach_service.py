@@ -8,7 +8,7 @@ from app.config import Config
 from app.database import Database
 from app.knowledge import KnowledgeBase
 from app.logger import get_logger
-from app.models import MetricLog, PrimaryGoal, Runner, RunningLevel, Shoe
+from app.models import MetricLog, PrimaryGoal, Runner, RunningLevel
 
 logger = get_logger(__name__)
 
@@ -90,7 +90,6 @@ class CoachService:
             "\U0001f4ca /status - See your progress\n"
             "\u23f1\ufe0f /history - Your recent runs\n"
             "\u2696\ufe0f /metrics - Track weight, sleep, HRV\n"
-            "\U0001f45f /shoes - Manage your running shoes\n"
             "\U0001f44b /start - View your profile\n\n"
             "Just chat with me about your running too \U0001f4ac\n"
             "Admin stuff available for authorized users \U0001f512"
@@ -211,45 +210,6 @@ class CoachService:
             )
         lines.append(f"\nShowing {len(runs)} runs. /record to add more!")
         return "\n".join(lines)
-
-    async def handle_shoes(self, chat_id: int, args: str) -> str:
-        if not args or args == "list":
-            shoes = await self.db.get_shoes(chat_id)
-            if not shoes:
-                return "No shoes yet! Add one: /shoes add Nike Pegasus 40 \U0001f45f"
-            lines = ["\U0001f45f *Your Shoes*\n"]
-            for s in shoes:
-                retired = " \u26d4 retired" if s.retired else ""
-                lines.append(
-                    f"- *{s.name}* [{s.type}] \u2022 {s.km_on_shoes:.0f}km{retired}"
-                )
-            return "\n".join(lines)
-
-        if args.startswith("add "):
-            rest = args[4:]
-            parts = rest.rsplit(" ", 1)
-            name = parts[0]
-            shoe_type = (
-                parts[1]
-                if len(parts) > 1
-                and parts[1] in ("daily_trainer", "speed", "race", "trail")
-                else "daily_trainer"
-            )
-            shoe = Shoe(chat_id=chat_id, name=name, type=shoe_type)
-            await self.db.create_shoe(shoe)
-            return f"\u2705 Added *{name}* ({shoe_type})! \U0001f45f"
-
-        if args.startswith("retire "):
-            name = args[7:].strip()
-            shoes = await self.db.get_shoes(chat_id)
-            for s in shoes:
-                if s.name.lower() == name:
-                    s.retired = True
-                    await self.db.update_shoe(s)
-                    return f"✅ Retired: {s.name} ({s.km_on_shoes:.0f}km used)"
-            return f"Shoe not found: {name}"
-
-        return "Usage:\n/shoes list\n/shoes add <name> [type]\n/shoes retire <name>"
 
     async def handle_conversation(self, chat_id: int, message: str) -> Optional[str]:
         return await self.coach.process_conversation(chat_id, message)
