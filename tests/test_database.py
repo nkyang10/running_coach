@@ -7,7 +7,6 @@ import pytest
 from app.models import (
     CoachObservation,
     Injury,
-    MetricLog,
     Milestone,
     PersonalBest,
     Run,
@@ -192,7 +191,10 @@ class TestRunCRUD:
     async def test_get_recent_runs(self, db, sample_runner):
         await db.create_runner(sample_runner)
         from datetime import timedelta
-        old_run = Run(chat_id=90001, run_date=date.today() - timedelta(days=60), distance_km=3)
+
+        old_run = Run(
+            chat_id=90001, run_date=date.today() - timedelta(days=60), distance_km=3
+        )
         new_run = Run(chat_id=90001, run_date=date.today(), distance_km=5)
         await db.create_run(old_run)
         await db.create_run(new_run)
@@ -203,7 +205,9 @@ class TestRunCRUD:
     async def test_get_runs_pagination(self, db, sample_runner):
         await db.create_runner(sample_runner)
         for i in range(5):
-            await db.create_run(Run(chat_id=90001, run_date=date.today(), distance_km=float(i)))
+            await db.create_run(
+                Run(chat_id=90001, run_date=date.today(), distance_km=float(i))
+            )
         runs_page = await db.get_runs(90001, limit=2)
         assert len(runs_page) == 2
 
@@ -221,7 +225,11 @@ class TestRunSplitCRUD:
         await db.create_runner(sample_runner)
         run = await db.create_run(sample_run)
         for i in range(4):
-            await db.create_run_split(RunSplit(run_id=run.id, split_number=i + 1, distance_m=400, duration_sec=90))
+            await db.create_run_split(
+                RunSplit(
+                    run_id=run.id, split_number=i + 1, distance_m=400, duration_sec=90
+                )
+            )
         splits = await db.get_run_splits(run.id)
         assert len(splits) == 4
 
@@ -237,15 +245,19 @@ class TestPersonalBestCRUD:
         await db.create_runner(sample_runner)
         await db.upsert_personal_best(sample_pb)
         sample_pb.time_sec = 1400
-        updated = await db.upsert_personal_best(sample_pb)
+        await db.upsert_personal_best(sample_pb)
         pbs = await db.get_personal_bests(90001)
         assert len(pbs) == 1
         assert pbs[0].time_sec == 1400
 
     async def test_get_personal_bests(self, db, sample_runner):
         await db.create_runner(sample_runner)
-        await db.upsert_personal_best(PersonalBest(chat_id=90001, distance="5k", time_sec=1500))
-        await db.upsert_personal_best(PersonalBest(chat_id=90001, distance="10k", time_sec=3200))
+        await db.upsert_personal_best(
+            PersonalBest(chat_id=90001, distance="5k", time_sec=1500)
+        )
+        await db.upsert_personal_best(
+            PersonalBest(chat_id=90001, distance="10k", time_sec=3200)
+        )
         pbs = await db.get_personal_bests(90001)
         assert len(pbs) == 2
 
@@ -276,8 +288,18 @@ class TestObservationCRUD:
 
     async def test_get_active_observations(self, db, sample_runner):
         await db.create_runner(sample_runner)
-        obs1 = CoachObservation(chat_id=90001, category="pattern", observation="Skips long runs", active=True)
-        obs2 = CoachObservation(chat_id=90001, category="preference", observation="Likes morning runs", active=False)
+        obs1 = CoachObservation(
+            chat_id=90001,
+            category="pattern",
+            observation="Skips long runs",
+            active=True,
+        )
+        obs2 = CoachObservation(
+            chat_id=90001,
+            category="preference",
+            observation="Likes morning runs",
+            active=False,
+        )
         await db.create_observation(obs1)
         await db.create_observation(obs2)
         active = await db.get_observations(90001, active_only=True)
@@ -321,7 +343,11 @@ class TestMilestoneCRUD:
 
     async def test_get_milestones(self, db, sample_runner):
         await db.create_runner(sample_runner)
-        await db.create_milestone(Milestone(chat_id=90001, milestone_type="first_5k", title="First 5K"))
-        await db.create_milestone(Milestone(chat_id=90001, milestone_type="streak", title="7 Day Streak"))
+        await db.create_milestone(
+            Milestone(chat_id=90001, milestone_type="first_5k", title="First 5K")
+        )
+        await db.create_milestone(
+            Milestone(chat_id=90001, milestone_type="streak", title="7 Day Streak")
+        )
         milestones = await db.get_milestones(90001)
         assert len(milestones) == 2

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 from typing import AsyncGenerator
 
 import pytest
@@ -10,19 +9,15 @@ import pytest_asyncio
 from app.database import Database
 from app.models import (
     CoachObservation,
-    ConnectedServiceRecord,
     Injury,
     MetricLog,
-    Milestone,
     PersonalBest,
     PrimaryGoal,
     Run,
     Runner,
-    RunSplit,
     RunningLevel,
     Shoe,
     ShoeType,
-    TrainingPhase,
 )
 
 

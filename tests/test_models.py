@@ -171,7 +171,9 @@ class TestMetricLogModel:
         assert sample_metric.value == 65.0
 
     def test_category_enum(self):
-        metric = MetricLog(chat_id=1, category="performance", metric_name="vo2max", value=45)
+        metric = MetricLog(
+            chat_id=1, category="performance", metric_name="vo2max", value=45
+        )
         assert metric.category == "performance"
 
 
@@ -181,7 +183,9 @@ class TestCoachObservationModel:
         assert sample_observation.active is True
 
     def test_category_enum(self):
-        obs = CoachObservation(chat_id=1, category="pattern", observation="Skips long runs")
+        obs = CoachObservation(
+            chat_id=1, category="pattern", observation="Skips long runs"
+        )
         assert obs.category == "pattern"
 
 

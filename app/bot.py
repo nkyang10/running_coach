@@ -30,11 +30,7 @@ class CoachBot:
         self.application: Optional[Application] = None
 
     async def start_bot(self) -> Application:
-        app = (
-            Application.builder()
-            .token(self.config.telegram_bot_token)
-            .build()
-        )
+        app = Application.builder().token(self.config.telegram_bot_token).build()
 
         app.add_handler(CommandHandler("start", self.cmd_start))
         app.add_handler(CommandHandler("help", self.cmd_help))
@@ -43,16 +39,24 @@ class CoachBot:
             entry_points=[CommandHandler("start", self.cmd_start)],
             states={
                 ONBOARDING_NAME: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.onboarding_name)
+                    MessageHandler(
+                        filters.TEXT & ~filters.COMMAND, self.onboarding_name
+                    )
                 ],
                 ONBOARDING_LEVEL: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.onboarding_level)
+                    MessageHandler(
+                        filters.TEXT & ~filters.COMMAND, self.onboarding_level
+                    )
                 ],
                 ONBOARDING_GOAL: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.onboarding_goal)
+                    MessageHandler(
+                        filters.TEXT & ~filters.COMMAND, self.onboarding_goal
+                    )
                 ],
                 ONBOARDING_WEEKLY_KM: [
-                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.onboarding_weekly_km)
+                    MessageHandler(
+                        filters.TEXT & ~filters.COMMAND, self.onboarding_weekly_km
+                    )
                 ],
             },
             fallbacks=[CommandHandler("cancel", self.cmd_cancel)],
@@ -86,7 +90,9 @@ class CoachBot:
 
     # ─── /start ───
 
-    async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def cmd_start(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         chat_id = update.effective_user.id if update.effective_user else 0
         existing = await self.db.get_runner(chat_id)
 
@@ -109,7 +115,9 @@ class CoachBot:
         )
         return ONBOARDING_NAME
 
-    async def onboarding_name(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def onboarding_name(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         if not update.message or not update.message.text:
             return ONBOARDING_NAME
         context.user_data["onboard_name"] = update.message.text.strip()
@@ -124,7 +132,9 @@ class CoachBot:
         )
         return ONBOARDING_LEVEL
 
-    async def onboarding_level(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def onboarding_level(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         if not update.message or not update.message.text:
             return ONBOARDING_LEVEL
         text = update.message.text.strip()
@@ -155,7 +165,9 @@ class CoachBot:
         )
         return ONBOARDING_GOAL
 
-    async def onboarding_goal(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def onboarding_goal(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         if not update.message or not update.message.text:
             return ONBOARDING_GOAL
         text = update.message.text.strip()
@@ -184,7 +196,9 @@ class CoachBot:
         )
         return ONBOARDING_WEEKLY_KM
 
-    async def onboarding_weekly_km(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def onboarding_weekly_km(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         if not update.message or not update.message.text:
             return ONBOARDING_WEEKLY_KM
         try:
@@ -218,7 +232,9 @@ class CoachBot:
 
     # ─── /help ───
 
-    async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def cmd_help(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         text = (
             "🤖 AI Running Coach Commands\n\n"
             "/start - View profile or re-onboard\n"
@@ -235,13 +251,17 @@ class CoachBot:
 
     # ─── /cancel (onboarding fallback) ───
 
-    async def cmd_cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def cmd_cancel(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> int:
         await self.reply(update, "Onboarding cancelled. Use /start to try again.")
         return ConversationHandler.END
 
     # ─── Admin Commands ───
 
-    async def cmd_admin_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def cmd_admin_status(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         chat_id = update.effective_user.id if update.effective_user else 0
         if not self.is_admin(chat_id):
             await self.reply(update, "Sorry, this command is for admins only.")
@@ -262,7 +282,9 @@ class CoachBot:
         )
         await self.reply(update, text)
 
-    async def cmd_admin_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def cmd_admin_help(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
         chat_id = update.effective_user.id if update.effective_user else 0
         if not self.is_admin(chat_id):
             await self.reply(update, "Sorry, this command is for admins only.")

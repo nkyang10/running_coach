@@ -69,7 +69,11 @@ def load_config(env_file: str | None = None) -> Config:
     except ValueError:
         qc_interval = 60
 
-    use_real_llm = os.getenv("COACH_USE_REAL_LLM", "false").lower() in ("true", "1", "yes")
+    use_real_llm = os.getenv("COACH_USE_REAL_LLM", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
     return Config(
         telegram_bot_token=token,

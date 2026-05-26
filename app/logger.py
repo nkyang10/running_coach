@@ -37,9 +37,7 @@ def setup_logging(
             structlog.stdlib.ProcessorFormatter(
                 processors=[
                     structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-                    structlog.dev.ConsoleRenderer(
-                        colors=sys.stdout.isatty()
-                    ),
+                    structlog.dev.ConsoleRenderer(colors=sys.stdout.isatty()),
                 ],
                 foreign_pre_chain=shared_processors,
             )

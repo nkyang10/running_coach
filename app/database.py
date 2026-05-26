@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import AsyncGenerator, Optional
+from typing import Optional
 
 import aiosqlite
 
@@ -19,7 +18,6 @@ from app.models import (
     Runner,
     RunSplit,
     Shoe,
-    UserTag,
 )
 
 logger = get_logger(__name__)
@@ -265,19 +263,43 @@ class Database:
                total_runs, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                runner.chat_id, runner.name, runner.age, runner.gender,
-                runner.running_level.value, runner.primary_goal.value,
-                runner.target_race_name, runner.target_race_date,
-                runner.target_race_time_sec, runner.running_history_months,
-                runner.current_weekly_km, runner.preferred_days, runner.preferred_time,
-                runner.max_session_minutes, runner.current_program, runner.program_started,
-                runner.week_of_program, runner.training_phase.value, runner.fatigue_level,
-                runner.consistency_30d, runner.streak_days, runner.resting_hr,
-                runner.hr_variability, runner.vo2max_estimate, runner.cadence_avg,
-                runner.language, runner.communication_style, runner.detail_level,
-                runner.location_city, runner.location_lat, runner.location_lon,
-                runner.location_timezone, int(runner.weather_enabled), runner.last_active,
-                runner.total_runs, now, now,
+                runner.chat_id,
+                runner.name,
+                runner.age,
+                runner.gender,
+                runner.running_level.value,
+                runner.primary_goal.value,
+                runner.target_race_name,
+                runner.target_race_date,
+                runner.target_race_time_sec,
+                runner.running_history_months,
+                runner.current_weekly_km,
+                runner.preferred_days,
+                runner.preferred_time,
+                runner.max_session_minutes,
+                runner.current_program,
+                runner.program_started,
+                runner.week_of_program,
+                runner.training_phase.value,
+                runner.fatigue_level,
+                runner.consistency_30d,
+                runner.streak_days,
+                runner.resting_hr,
+                runner.hr_variability,
+                runner.vo2max_estimate,
+                runner.cadence_avg,
+                runner.language,
+                runner.communication_style,
+                runner.detail_level,
+                runner.location_city,
+                runner.location_lat,
+                runner.location_lon,
+                runner.location_timezone,
+                int(runner.weather_enabled),
+                runner.last_active,
+                runner.total_runs,
+                now,
+                now,
             ),
         )
         await self.commit()
@@ -306,18 +328,42 @@ class Database:
                last_active=?, total_runs=?, updated_at=?
                WHERE chat_id=?""",
             (
-                runner.name, runner.age, runner.gender, runner.running_level.value,
-                runner.primary_goal.value, runner.target_race_name, runner.target_race_date,
-                runner.target_race_time_sec, runner.running_history_months,
-                runner.current_weekly_km, runner.preferred_days, runner.preferred_time,
-                runner.max_session_minutes, runner.current_program, runner.program_started,
-                runner.week_of_program, runner.training_phase.value, runner.fatigue_level,
-                runner.consistency_30d, runner.streak_days, runner.resting_hr,
-                runner.hr_variability, runner.vo2max_estimate, runner.cadence_avg,
-                runner.language, runner.communication_style, runner.detail_level,
-                runner.location_city, runner.location_lat, runner.location_lon,
-                runner.location_timezone, int(runner.weather_enabled), runner.last_active,
-                runner.total_runs, runner.updated_at, runner.chat_id,
+                runner.name,
+                runner.age,
+                runner.gender,
+                runner.running_level.value,
+                runner.primary_goal.value,
+                runner.target_race_name,
+                runner.target_race_date,
+                runner.target_race_time_sec,
+                runner.running_history_months,
+                runner.current_weekly_km,
+                runner.preferred_days,
+                runner.preferred_time,
+                runner.max_session_minutes,
+                runner.current_program,
+                runner.program_started,
+                runner.week_of_program,
+                runner.training_phase.value,
+                runner.fatigue_level,
+                runner.consistency_30d,
+                runner.streak_days,
+                runner.resting_hr,
+                runner.hr_variability,
+                runner.vo2max_estimate,
+                runner.cadence_avg,
+                runner.language,
+                runner.communication_style,
+                runner.detail_level,
+                runner.location_city,
+                runner.location_lat,
+                runner.location_lon,
+                runner.location_timezone,
+                int(runner.weather_enabled),
+                runner.last_active,
+                runner.total_runs,
+                runner.updated_at,
+                runner.chat_id,
             ),
         )
         await self.commit()
@@ -385,17 +431,25 @@ class Database:
                onset_date, resolved_date, active, modified_training, source)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                injury.chat_id, injury.body_part, injury.injury_type, injury.description,
+                injury.chat_id,
+                injury.body_part,
+                injury.injury_type,
+                injury.description,
                 injury.severity.value if injury.severity else "mild",
-                injury.onset_date, injury.resolved_date, int(injury.active),
-                injury.modified_training, injury.source,
+                injury.onset_date,
+                injury.resolved_date,
+                int(injury.active),
+                injury.modified_training,
+                injury.source,
             ),
         )
         await self.commit()
         injury.id = cursor.lastrowid
         return injury
 
-    async def get_injuries(self, chat_id: int, active_only: bool = True) -> list[Injury]:
+    async def get_injuries(
+        self, chat_id: int, active_only: bool = True
+    ) -> list[Injury]:
         if active_only:
             rows = await self.fetchall(
                 "SELECT * FROM injuries WHERE chat_id = ? AND active = 1 ORDER BY onset_date DESC",
@@ -414,10 +468,16 @@ class Database:
                onset_date=?, resolved_date=?, active=?, modified_training=?, source=?
                WHERE id=?""",
             (
-                injury.body_part, injury.injury_type, injury.description,
+                injury.body_part,
+                injury.injury_type,
+                injury.description,
                 injury.severity.value if injury.severity else "mild",
-                injury.onset_date, injury.resolved_date, int(injury.active),
-                injury.modified_training, injury.source, injury.id,
+                injury.onset_date,
+                injury.resolved_date,
+                int(injury.active),
+                injury.modified_training,
+                injury.source,
+                injury.id,
             ),
         )
         await self.commit()
@@ -446,8 +506,12 @@ class Database:
             """INSERT INTO shoes (chat_id, name, type, km_on_shoes, added_date, retired)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (
-                shoe.chat_id, shoe.name, shoe.type.value if shoe.type else "daily_trainer",
-                shoe.km_on_shoes, shoe.added_date, int(shoe.retired),
+                shoe.chat_id,
+                shoe.name,
+                shoe.type.value if shoe.type else "daily_trainer",
+                shoe.km_on_shoes,
+                shoe.added_date,
+                int(shoe.retired),
             ),
         )
         await self.commit()
@@ -462,7 +526,8 @@ class Database:
             )
         else:
             rows = await self.fetchall(
-                "SELECT * FROM shoes WHERE chat_id = ? ORDER BY added_date DESC", (chat_id,),
+                "SELECT * FROM shoes WHERE chat_id = ? ORDER BY added_date DESC",
+                (chat_id,),
             )
         return [self._row_to_shoe(r) for r in rows]
 
@@ -470,8 +535,14 @@ class Database:
         await self.execute(
             """UPDATE shoes SET name=?, type=?, km_on_shoes=?, added_date=?, retired=?
                WHERE id=?""",
-            (shoe.name, shoe.type.value if shoe.type else "daily_trainer",
-             shoe.km_on_shoes, shoe.added_date, int(shoe.retired), shoe.id),
+            (
+                shoe.name,
+                shoe.type.value if shoe.type else "daily_trainer",
+                shoe.km_on_shoes,
+                shoe.added_date,
+                int(shoe.retired),
+                shoe.id,
+            ),
         )
         await self.commit()
         return shoe
@@ -496,12 +567,24 @@ class Database:
                shoe_id, weather_temp_c, weather_condition, weather_impact, source, confidence)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                run.chat_id, run.run_date, run.run_type.value if run.run_type else None,
-                run.distance_km, run.duration_sec, run.avg_pace_sec_per_km, run.avg_hr,
-                run.max_hr, run.cadence_avg, run.elevation_gain_m, run.rpe, run.notes,
-                run.shoe_id, run.weather_temp_c,
+                run.chat_id,
+                run.run_date,
+                run.run_type.value if run.run_type else None,
+                run.distance_km,
+                run.duration_sec,
+                run.avg_pace_sec_per_km,
+                run.avg_hr,
+                run.max_hr,
+                run.cadence_avg,
+                run.elevation_gain_m,
+                run.rpe,
+                run.notes,
+                run.shoe_id,
+                run.weather_temp_c,
                 run.weather_condition.value if run.weather_condition else None,
-                run.weather_impact, run.source.value, run.confidence,
+                run.weather_impact,
+                run.source.value,
+                run.confidence,
             ),
         )
         await self.commit()
@@ -560,7 +643,13 @@ class Database:
         cursor = await self.execute(
             """INSERT INTO run_splits (run_id, split_number, distance_m, duration_sec, recovery_sec)
                VALUES (?, ?, ?, ?, ?)""",
-            (split.run_id, split.split_number, split.distance_m, split.duration_sec, split.recovery_sec),
+            (
+                split.run_id,
+                split.split_number,
+                split.distance_m,
+                split.duration_sec,
+                split.recovery_sec,
+            ),
         )
         await self.commit()
         split.id = cursor.lastrowid
@@ -568,14 +657,18 @@ class Database:
 
     async def get_run_splits(self, run_id: int) -> list[RunSplit]:
         rows = await self.fetchall(
-            "SELECT * FROM run_splits WHERE run_id = ? ORDER BY split_number", (run_id,),
+            "SELECT * FROM run_splits WHERE run_id = ? ORDER BY split_number",
+            (run_id,),
         )
         return [self._row_to_split(r) for r in rows]
 
     def _row_to_split(self, row: aiosqlite.Row) -> RunSplit:
         return RunSplit(
-            id=row["id"], run_id=row["run_id"], split_number=row["split_number"],
-            distance_m=row["distance_m"], duration_sec=row["duration_sec"],
+            id=row["id"],
+            run_id=row["run_id"],
+            split_number=row["split_number"],
+            distance_m=row["distance_m"],
+            duration_sec=row["duration_sec"],
             recovery_sec=row["recovery_sec"],
         )
 
@@ -603,14 +696,18 @@ class Database:
 
     async def get_personal_bests(self, chat_id: int) -> list[PersonalBest]:
         rows = await self.fetchall(
-            "SELECT * FROM personal_bests WHERE chat_id = ? ORDER BY distance", (chat_id,),
+            "SELECT * FROM personal_bests WHERE chat_id = ? ORDER BY distance",
+            (chat_id,),
         )
         return [self._row_to_pb(r) for r in rows]
 
     def _row_to_pb(self, row: aiosqlite.Row) -> PersonalBest:
         return PersonalBest(
-            id=row["id"], chat_id=row["chat_id"], distance=row["distance"],
-            time_sec=row["time_sec"], achieved_date=self._parse_date(row["achieved_date"]),
+            id=row["id"],
+            chat_id=row["chat_id"],
+            distance=row["distance"],
+            time_sec=row["time_sec"],
+            achieved_date=self._parse_date(row["achieved_date"]),
             run_id=row["run_id"],
         )
 
@@ -620,8 +717,13 @@ class Database:
         cursor = await self.execute(
             "INSERT INTO metric_log (chat_id, category, metric_name, value, unit, source, confidence) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
-                metric.chat_id, metric.category.value if metric.category else "body",
-                metric.metric_name, metric.value, metric.unit, metric.source, metric.confidence,
+                metric.chat_id,
+                metric.category.value if metric.category else "body",
+                metric.metric_name,
+                metric.value,
+                metric.unit,
+                metric.source,
+                metric.confidence,
             ),
         )
         await self.commit()
@@ -639,9 +741,14 @@ class Database:
 
     def _row_to_metric(self, row: aiosqlite.Row) -> MetricLog:
         return MetricLog(
-            id=row["id"], chat_id=row["chat_id"], category=row["category"],
-            metric_name=row["metric_name"], value=row["value"], unit=row["unit"],
-            source=row["source"], confidence=row["confidence"],
+            id=row["id"],
+            chat_id=row["chat_id"],
+            category=row["category"],
+            metric_name=row["metric_name"],
+            value=row["value"],
+            unit=row["unit"],
+            source=row["source"],
+            confidence=row["confidence"],
             recorded_at=self._parse_datetime(row["recorded_at"]),
         )
 
@@ -653,16 +760,23 @@ class Database:
         cursor = await self.execute(
             "INSERT INTO coach_observations (chat_id, category, observation, evidence, confidence, first_observed, last_observed, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                obs.chat_id, obs.category.value if obs.category else "pattern",
-                obs.observation, obs.evidence, obs.confidence,
-                obs.first_observed, obs.last_observed, int(obs.active),
+                obs.chat_id,
+                obs.category.value if obs.category else "pattern",
+                obs.observation,
+                obs.evidence,
+                obs.confidence,
+                obs.first_observed,
+                obs.last_observed,
+                int(obs.active),
             ),
         )
         await self.commit()
         obs.id = cursor.lastrowid
         return obs
 
-    async def get_observations(self, chat_id: int, active_only: bool = True) -> list[CoachObservation]:
+    async def get_observations(
+        self, chat_id: int, active_only: bool = True
+    ) -> list[CoachObservation]:
         if active_only:
             rows = await self.fetchall(
                 "SELECT * FROM coach_observations WHERE chat_id = ? AND active = 1 ORDER BY last_observed DESC",
@@ -677,8 +791,11 @@ class Database:
 
     def _row_to_obs(self, row: aiosqlite.Row) -> CoachObservation:
         return CoachObservation(
-            id=row["id"], chat_id=row["chat_id"], category=row["category"],
-            observation=row["observation"], evidence=row["evidence"],
+            id=row["id"],
+            chat_id=row["chat_id"],
+            category=row["category"],
+            observation=row["observation"],
+            evidence=row["evidence"],
             confidence=row["confidence"],
             first_observed=self._parse_date(row["first_observed"]),
             last_observed=self._parse_date(row["last_observed"]),
@@ -687,28 +804,40 @@ class Database:
 
     # ─── Connected Services CRUD ───
 
-    async def upsert_connected_service(self, svc: ConnectedServiceRecord) -> ConnectedServiceRecord:
+    async def upsert_connected_service(
+        self, svc: ConnectedServiceRecord
+    ) -> ConnectedServiceRecord:
         await self.execute(
             "INSERT OR REPLACE INTO connected_services (chat_id, service, connected, scopes, token_encrypted, last_sync, last_sync_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
-                svc.chat_id, svc.service.value if svc.service else "garmin",
-                int(svc.connected), svc.scopes, svc.token_encrypted,
-                svc.last_sync, svc.last_sync_status,
+                svc.chat_id,
+                svc.service.value if svc.service else "garmin",
+                int(svc.connected),
+                svc.scopes,
+                svc.token_encrypted,
+                svc.last_sync,
+                svc.last_sync_status,
             ),
         )
         await self.commit()
         return svc
 
-    async def get_connected_services(self, chat_id: int) -> list[ConnectedServiceRecord]:
+    async def get_connected_services(
+        self, chat_id: int
+    ) -> list[ConnectedServiceRecord]:
         rows = await self.fetchall(
-            "SELECT * FROM connected_services WHERE chat_id = ?", (chat_id,),
+            "SELECT * FROM connected_services WHERE chat_id = ?",
+            (chat_id,),
         )
         return [self._row_to_svc(r) for r in rows]
 
     def _row_to_svc(self, row: aiosqlite.Row) -> ConnectedServiceRecord:
         return ConnectedServiceRecord(
-            id=row["id"], chat_id=row["chat_id"], service=row["service"],
-            connected=bool(row["connected"]), scopes=row["scopes"],
+            id=row["id"],
+            chat_id=row["chat_id"],
+            service=row["service"],
+            connected=bool(row["connected"]),
+            scopes=row["scopes"],
             token_encrypted=row["token_encrypted"],
             last_sync=self._parse_datetime(row["last_sync"]),
             last_sync_status=row["last_sync_status"],
@@ -720,8 +849,15 @@ class Database:
         cursor = await self.execute(
             "INSERT INTO milestones (chat_id, milestone_type, title, value, achieved_date) VALUES (?, ?, ?, ?, ?)",
             (
-                milestone.chat_id, milestone.milestone_type.value if milestone.milestone_type else "streak",
-                milestone.title, milestone.value, milestone.achieved_date,
+                milestone.chat_id,
+                (
+                    milestone.milestone_type.value
+                    if milestone.milestone_type
+                    else "streak"
+                ),
+                milestone.title,
+                milestone.value,
+                milestone.achieved_date,
             ),
         )
         await self.commit()
@@ -730,14 +866,18 @@ class Database:
 
     async def get_milestones(self, chat_id: int) -> list[Milestone]:
         rows = await self.fetchall(
-            "SELECT * FROM milestones WHERE chat_id = ? ORDER BY achieved_date DESC", (chat_id,),
+            "SELECT * FROM milestones WHERE chat_id = ? ORDER BY achieved_date DESC",
+            (chat_id,),
         )
         return [self._row_to_milestone(r) for r in rows]
 
     def _row_to_milestone(self, row: aiosqlite.Row) -> Milestone:
         return Milestone(
-            id=row["id"], chat_id=row["chat_id"], milestone_type=row["milestone_type"],
-            title=row["title"], value=row["value"],
+            id=row["id"],
+            chat_id=row["chat_id"],
+            milestone_type=row["milestone_type"],
+            title=row["title"],
+            value=row["value"],
             achieved_date=self._parse_date(row["achieved_date"]),
             created_at=self._parse_datetime(row["created_at"]),
         )
@@ -746,19 +886,22 @@ class Database:
 
     async def add_tag(self, chat_id: int, tag: str) -> None:
         await self.execute(
-            "INSERT OR IGNORE INTO user_tags (chat_id, tag) VALUES (?, ?)", (chat_id, tag),
+            "INSERT OR IGNORE INTO user_tags (chat_id, tag) VALUES (?, ?)",
+            (chat_id, tag),
         )
         await self.commit()
 
     async def remove_tag(self, chat_id: int, tag: str) -> None:
         await self.execute(
-            "DELETE FROM user_tags WHERE chat_id = ? AND tag = ?", (chat_id, tag),
+            "DELETE FROM user_tags WHERE chat_id = ? AND tag = ?",
+            (chat_id, tag),
         )
         await self.commit()
 
     async def get_tags(self, chat_id: int) -> list[str]:
         rows = await self.fetchall(
-            "SELECT tag FROM user_tags WHERE chat_id = ? ORDER BY tag", (chat_id,),
+            "SELECT tag FROM user_tags WHERE chat_id = ? ORDER BY tag",
+            (chat_id,),
         )
         return [r["tag"] for r in rows]
 
