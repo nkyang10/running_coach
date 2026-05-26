@@ -175,3 +175,40 @@ class TestCoachEngine:
         assert engine.config == config
         assert engine.db == db
         assert engine.kb == kb
+
+    async def test_basic_parse_distance(self):
+        result = CoachEngine._basic_parse("ran 10km today")
+        assert result["distance_km"] == 10
+
+    async def test_basic_parse_miles(self):
+        result = CoachEngine._basic_parse("ran 5 miles")
+        assert result["distance_km"] == 8.05
+
+    async def test_basic_parse_duration(self):
+        result = CoachEngine._basic_parse("ran for 30 min")
+        assert result["duration_sec"] == 1800
+
+    async def test_basic_parse_rpe(self):
+        result = CoachEngine._basic_parse("felt hard RPE 8")
+        assert result["rpe"] == 8
+
+    async def test_basic_parse_type(self):
+        result = CoachEngine._basic_parse("tempo run 5k")
+        assert result["run_type"] == "tempo"
+
+    async def test_basic_parse_type_recovery(self):
+        result = CoachEngine._basic_parse("easy recovery jog")
+        assert result["run_type"] == "recovery"
+
+    async def test_basic_parse_all_fields(self):
+        result = CoachEngine._basic_parse("tempo 8km in 40 min RPE 7")
+        assert result["distance_km"] == 8
+        assert result["duration_sec"] == 2400
+        assert result["rpe"] == 7
+        assert result["run_type"] == "tempo"
+
+    async def test_basic_parse_empty(self):
+        result = CoachEngine._basic_parse("")
+        assert result["distance_km"] is None
+        assert result["duration_sec"] is None
+        assert result["rpe"] is None

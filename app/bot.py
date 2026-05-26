@@ -73,6 +73,10 @@ class CoachBot:
         )
         app.add_handler(onboarding_conv)
         app.add_handler(CommandHandler("plan", self.cmd_plan))
+        app.add_handler(CommandHandler("log", self.cmd_log))
+        app.add_handler(CommandHandler("status", self.cmd_status))
+        app.add_handler(CommandHandler("history", self.cmd_history))
+        app.add_handler(CommandHandler("metrics", self.cmd_metrics))
 
         from admin.commands import register_admin_commands
 
@@ -278,6 +282,199 @@ class CoachBot:
         await self.reply(update, "🏃 Generating your personalized training plan...")
         plan = await self.coach.generate_plan(chat_id)
         await self.reply(update, plan)
+
+    # ─── /log ───
+
+    async def cmd_log(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not await self.db.get_runner(chat_id):
+            await self.reply(update, "Please use /start to set up your profile first.")
+            return
+
+        text = update.message.text if update.message and update.message.text else ""
+        args = text[5:].strip()
+
+        if not args:
+            await self.reply(
+                update,
+                "Please describe your run, e.g.: /log 5k in 25min, felt easy RPE 6",
+            )
+            return
+
+        if self.coach:
+            parsed = await self.coach.parse_run_log(chat_id, args)
+        else:
+            parsed = {"distance_km": 5, "duration_sec": 1800, "rpe": 5, "notes": args}
+
+        run = (
+            await self.coach.save_run_from_parse(chat_id, parsed)
+            if self.coach
+            else None
+        )
+        if run:
+            dist = run.distance_km or 0
+            dur = run.duration_sec or 0
+            pace = f"{dur // 60}:{dur % 60:02d} /km" if dist > 0 and dur > 0 else "N/A"
+            reply = (
+                f"✅ Logged your run!\n"
+                f"Distance: {dist:.1f} km\n"
+                f"Duration: {dur // 60} min\n"
+                f"Pace: {pace}\n"
+                f"RPE: {run.rpe or 'N/A'}\n"
+                f"Type: {run.run_type or 'N/A'}\n"
+                f"Keep up the great work! 🎉"
+            )
+        else:
+            reply = "Run logged successfully! 🎉"
+        await self.reply(update, reply)
+
+    # ─── /status ───
+
+    async def cmd_status(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        runner = await self.db.get_runner(chat_id)
+        if not runner:
+            await self.reply(update, "Please use /start to set up your profile first.")
+            return
+
+        recent = await self.db.get_recent_runs(chat_id, days=30)
+        total_km = sum(r.distance_km or 0 for r in recent)
+        run_count = len(recent)
+        injuries = await self.db.get_injuries(chat_id, active_only=True)
+
+        status = (
+            f"📊 *Your Running Status*\n\n"
+            f"Level: {runner.running_level.value}\n"
+            f"Goal: {runner.primary_goal.value}\n"
+            f"Current weekly: {runner.current_weekly_km:.0f} km\n"
+            f"Fatigue: {'🟢' if runner.fatigue_level <= 2 else '🟡' if runner.fatigue_level <= 3 else '🔴'} {runner.fatigue_level}/5\n"
+            f"Consistency (30d): {runner.consistency_30d:.0%}\n"
+            f"Streak: {runner.streak_days} days\n"
+            f"Program: {runner.current_program or 'None'}\n"
+            f"Week: {runner.week_of_program} | Phase: {runner.training_phase.value}\n"
+            f"Total runs: {runner.total_runs}\n\n"
+            f"*Last 30 Days*\n"
+            f"Runs: {run_count}\n"
+            f"Total distance: {total_km:.1f} km\n"
+        )
+
+        if injuries:
+            status += "\n*Active Injuries*\n"
+            for i in injuries:
+                status += f"- {i.body_part} ({i.severity})\n"
+
+        status += "\nCommands: /plan  /log  /history  /help"
+        await self.reply(update, status)
+
+    # ─── /metrics ───
+
+    async def cmd_metrics(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not await self.db.get_runner(chat_id):
+            await self.reply(update, "Please use /start to set up your profile first.")
+            return
+
+        text = update.message.text if update.message and update.message.text else ""
+        args = text[9:].strip()
+
+        if not args:
+            recent = await self.db.get_metrics(chat_id, "weight_kg", limit=5)
+            if recent:
+                lines = ["📏 *Recent Metrics*\n"]
+                for m in recent:
+                    lines.append(
+                        f"- {m.metric_name}: {m.value} {m.unit or ''} ({m.recorded_at})"
+                    )
+                await self.reply(update, "\n".join(lines))
+            else:
+                await self.reply(
+                    update, "Usage: /metrics <name> <value>  e.g., /metrics weight 72"
+                )
+            return
+
+        parts = args.split()
+        if len(parts) < 2:
+            await self.reply(
+                update, "Usage: /metrics <name> <value>  e.g., /metrics weight 72"
+            )
+            return
+
+        name = parts[0].lower()
+        try:
+            value = float(parts[1])
+        except ValueError:
+            await self.reply(
+                update, "Value must be a number. Usage: /metrics weight 72"
+            )
+            return
+
+        category_map = {
+            "weight": "body",
+            "body_weight": "body",
+            "weight_kg": "body",
+            "sleep": "recovery",
+            "sleep_hours": "recovery",
+            "resting_hr": "recovery",
+            "hrv": "recovery",
+            "vo2max": "performance",
+            "vo2": "performance",
+        }
+        cat = category_map.get(name, "body")
+        unit_map = {
+            "weight": "kg",
+            "body_weight": "kg",
+            "weight_kg": "kg",
+            "sleep_hours": "hours",
+            "sleep": "hours",
+        }
+
+        from app.models import MetricLog
+
+        metric = MetricLog(
+            chat_id=chat_id,
+            category=cat,
+            metric_name=name,
+            value=value,
+            unit=unit_map.get(name),
+        )
+        await self.db.create_metric(metric)
+        await self.reply(
+            update, f"✅ Recorded {name}: {value} {unit_map.get(name, '')}"
+        )
+
+    # ─── /history ───
+
+    async def cmd_history(
+        self, update: Update, context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        chat_id = update.effective_user.id if update.effective_user else 0
+        if not await self.db.get_runner(chat_id):
+            await self.reply(update, "Please use /start to set up your profile first.")
+            return
+
+        runs = await self.db.get_runs(chat_id, limit=10)
+
+        if not runs:
+            await self.reply(
+                update, "No runs logged yet. Use /log to record your first run!"
+            )
+            return
+
+        lines = ["📋 *Recent Runs*\n"]
+        for i, run in enumerate(runs, 1):
+            dist = run.distance_km or 0
+            dur = run.duration_sec or 0
+            pace = f"{dur // 60}:{dur % 60:02d}" if dur > 0 else "N/A"
+            lines.append(
+                f"{i}. {run.run_date} | {dist:.1f}km | {dur // 60}min "
+                f"({pace}) | {run.run_type or 'run'} | RPE {run.rpe or 'N/A'}"
+            )
+        lines.append(f"\nTotal: {len(runs)} runs shown. Use /log to add more!")
+        await self.reply(update, "\n".join(lines))
 
     # ─── /cancel (onboarding fallback) ───
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional
+import re
+from datetime import date
+from typing import Any, Optional
 
 from openai import AsyncOpenAI
 
@@ -8,7 +10,7 @@ from app.config import Config
 from app.database import Database
 from app.knowledge import KnowledgeBase
 from app.logger import get_logger
-from app.models import Runner
+from app.models import Run, Runner
 
 logger = get_logger(__name__)
 
@@ -295,17 +297,113 @@ class CoachEngine:
         ]
         return "\n".join(plan)
 
+    async def parse_run_log(self, chat_id: int, text: str) -> dict[str, Any]:
+        prompt = (
+            "Parse the following run description and extract structured data. "
+            "Return ONLY a JSON object with these fields: "
+            "distance_km (float), duration_sec (int), run_type (easy/tempo/interval/long_run/recovery/race/other), "
+            "rpe (int 1-10), notes (string). "
+            "Set fields to null if not mentioned.\n\n"
+            f"Run description: {text}"
+        )
+        try:
+            response = await self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a run log parser. Return ONLY valid JSON.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=300,
+            )
+            content = response.choices[0].message.content or "{}"
+            content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
+            import json
+
+            parsed = json.loads(content)
+        except Exception as e:
+            logger.error("log_parse_failed", error=str(e))
+            parsed = self._basic_parse(text)
+        return parsed
+
+    async def save_run_from_parse(
+        self, chat_id: int, parsed: dict[str, Any]
+    ) -> Optional[Run]:
+        run = Run(
+            chat_id=chat_id,
+            run_date=date.today(),
+            distance_km=parsed.get("distance_km"),
+            duration_sec=parsed.get("duration_sec"),
+            run_type=parsed.get("run_type"),
+            rpe=parsed.get("rpe"),
+            notes=parsed.get("notes"),
+            source="manual",
+            confidence=0.9,
+        )
+        created = await self.db.create_run(run)
+
+        runner = await self.db.get_runner(chat_id)
+        if runner:
+            runner.total_runs = (runner.total_runs or 0) + 1
+            runner.last_active = date.today()
+            await self.db.update_runner(runner)
+
+        return created
+
+    @staticmethod
+    def _basic_parse(text: str) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "distance_km": None,
+            "duration_sec": None,
+            "run_type": None,
+            "rpe": None,
+            "notes": text,
+        }
+
+        dist_match = re.search(r"(\d+(?:\.\d+)?)\s*(km|k|kilo|miles|mi)", text.lower())
+        if dist_match:
+            val = float(dist_match.group(1))
+            unit = dist_match.group(2)
+            if unit in ("miles", "mi"):
+                val *= 1.60934
+            result["distance_km"] = round(val, 2)
+
+        dur_match = re.search(r"(\d+)\s*(?:min|mins|minute|minutes)", text.lower())
+        if dur_match:
+            result["duration_sec"] = int(dur_match.group(1)) * 60
+
+        rpe_match = re.search(r"(?:rpe|effort)\s*[:=]?\s*(\d+)", text.lower())
+        if rpe_match:
+            result["rpe"] = min(10, max(1, int(rpe_match.group(1))))
+
+        type_map = [
+            ("recovery", "recovery"),
+            ("easy", "easy"),
+            ("tempo", "tempo"),
+            ("interval", "interval"),
+            ("long", "long_run"),
+            ("race", "race"),
+            ("speed", "interval"),
+            ("hill", "interval"),
+            ("track", "interval"),
+        ]
+        for key, val in type_map:
+            if key in text.lower():
+                result["run_type"] = val
+                break
+
+        return result
+
     @staticmethod
     def _extract_km(text: str) -> float:
-        import re
-
         matches = re.findall(r"(\d+(?:\.\d+)?)\s*(?:km|k|kilo)", text.lower())
         return sum(float(m) for m in matches) if matches else 0
 
     @staticmethod
     def _pace_to_seconds(pace_str: str) -> Optional[float]:
-        import re
-
         match = re.match(r"(\d+):(\d+)", pace_str)
         if match:
             return int(match.group(1)) * 60 + int(match.group(2))
